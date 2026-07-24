@@ -9,9 +9,31 @@ const RPC_URL = 'https://soroban-testnet.stellar.org'
 const FRIENDBOT_URL = 'https://friendbot.stellar.org'
 const NETWORK = Networks.TESTNET
 
-const server = new rpc.Server(RPC_URL)
+const server = new rpc.Server(RPC_URL, { timeout: 30_000 })
 const contract = new Contract(CONTRACT_ID)
-const COORD_SCALE = 1000000
+const COORD_SCALE = 1_000_000
+
+/** Safely convert a Soroban contract value to a JavaScript number without precision loss.
+ *  Handles BigInt, number, and string inputs. Returns NaN for unconvertible values. */
+function safeToNumber(val) {
+  if (typeof val === 'number') return val
+  if (typeof val === 'bigint') {
+    if (val > BigInt(Number.MAX_SAFE_INTEGER) || val < BigInt(-Number.MAX_SAFE_INTEGER)) {
+      return NaN
+    }
+    return Number(val)
+  }
+  if (typeof val === 'string') return Number(val)
+  return NaN
+}
+
+/** Clamp a longitude value to [-180, 180]. */
+function clampLng(lng) {
+  if (lng < -180 || lng > 180) {
+    return ((lng + 180) % 360 + 360) % 360 - 180
+  }
+  return lng
+}
 
 // Dummy source for read-only simulations (no sequence number needed)
 const _readSource = new Account(Keypair.random().publicKey(), '0')
@@ -53,28 +75,32 @@ function scv(val, opts) {
 
 function mapRequest(raw) {
   const STATUS = ['Pending', 'Enroute', 'Resolved', 'Cancelled']
+  const lat = safeToNumber(raw.lat) / COORD_SCALE
+  const lng = safeToNumber(raw.lng) / COORD_SCALE
   return {
-    id: raw.id ? Number(raw.id) : raw.id,
+    id: raw.id ? safeToNumber(raw.id) : raw.id,
     requester: raw.requester,
-    lat: Number(raw.lat) / COORD_SCALE,
-    lng: Number(raw.lng) / COORD_SCALE,
+    lat: Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : null,
+    lng: Number.isFinite(lng) ? clampLng(lng) : null,
     emergency_type: raw.emergency_type,
     nickname: raw.nickname,
     contact: raw.contact,
     status: STATUS[raw.status] ?? (Array.isArray(raw.status) ? raw.status[0] : raw.status),
-    created_at: Number(raw.created_at),
-    resolved_at: raw.resolved_at ? Number(raw.resolved_at) : null,
+    created_at: safeToNumber(raw.created_at),
+    resolved_at: raw.resolved_at ? safeToNumber(raw.resolved_at) : null,
   }
 }
 
 function mapResponder(raw) {
+  const lat = safeToNumber(raw.lat) / COORD_SCALE
+  const lng = safeToNumber(raw.lng) / COORD_SCALE
   return {
     responder: raw.responder,
-    lat: Number(raw.lat) / COORD_SCALE,
-    lng: Number(raw.lng) / COORD_SCALE,
+    lat: Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : null,
+    lng: Number.isFinite(lng) ? clampLng(lng) : null,
     eta_seconds: raw.eta_seconds,
     arrived: raw.arrived,
-    responded_at: Number(raw.responded_at),
+    responded_at: safeToNumber(raw.responded_at),
   }
 }
 
@@ -131,13 +157,13 @@ export async function getActiveRequests(max = 50) {
   )
   if (!sim.result) return []
   const rawIds = scValToNative(sim.result.retval)
-  return rawIds.map(id => Number(id)).slice(0, max)
+  return rawIds.map(id => safeToNumber(id)).slice(0, max)
 }
 
 export async function getRequestCount() {
   const sim = await simulateRead(contract.call('get_request_count'))
   if (!sim.result) return 0
-  return Number(scValToNative(sim.result.retval))
+  return safeToNumber(scValToNative(sim.result.retval))
 }
 
 export async function getResponderCount(requestId) {
@@ -331,10 +357,11 @@ async function sendWrite(rawTx, wallet, operation = '') {
 }
 
 function guardNaN(val, label) {
-  if (typeof val !== 'number' || !Number.isFinite(val)) {
+  const num = safeToNumber(val)
+  if (!Number.isFinite(num)) {
     throw new Error(`${label} is invalid (got ${JSON.stringify(val)})`)
   }
-  return val
+  return num
 }
 
 export async function createRequest(requester, lat, lng, emergencyType, nickname, contact, wallet) {
@@ -360,7 +387,7 @@ export async function createRequest(requester, lat, lng, emergencyType, nickname
 
   const result = await sendWrite(tx, wallet, 'create_request')
   const retval = scValToNative(result.returnValue)
-  return { requestId: Number(retval), hash: result.hash }
+  return { requestId: safeToNumber(retval), hash: result.hash }
 }
 
 export async function acceptRequest(responder, requestId, lat, lng, etaSeconds, wallet) {
@@ -385,7 +412,7 @@ export async function acceptRequest(responder, requestId, lat, lng, etaSeconds, 
 
   const result = await sendWrite(tx, wallet, 'accept_request')
   const retval = scValToNative(result.returnValue)
-  return { index: retval, hash: result.hash }
+  return { index: safeToNumber(retval), hash: result.hash }
 }
 
 export async function markArrived(responder, requestId, wallet) {
