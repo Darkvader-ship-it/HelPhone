@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit/sdk'
 import { KitEventType } from '@creit-tech/stellar-wallets-kit/types'
@@ -1152,12 +1152,28 @@ export default function Help() {
   useEffect(() => {
     if (!activeWalletAddress) { setMyRequests([]); return }
     let mounted = true
+
+    // Retry a single request fetch with exponential backoff (#313)
+    async function fetchWithBackoff(id, maxAttempts = 3) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          return await getRequest(id)
+        } catch {
+          if (attempt < maxAttempts - 1) {
+            await new Promise(r => setTimeout(r, 200 * 2 ** attempt))
+          }
+        }
+      }
+      return null
+    }
+
     async function fetchMyRequests() {
-      const ids = loadMyRequestIds()
+      // Validate IDs from localStorage are non-empty strings before fetching (#311)
+      const ids = loadMyRequestIds().filter(id => typeof id === 'string' && id.trim().length > 0)
       if (ids.length === 0) { if (mounted) setMyRequests([]); return }
       setMyRequestsLoading(true)
       try {
-        const results = await Promise.all(ids.map(id => getRequest(id).catch(() => null)))
+        const results = await Promise.all(ids.map(id => fetchWithBackoff(id)))
         const filtered = results.filter(r => r && r.requester === activeWalletAddress)
         filtered.sort((a, b) => b.created_at - a.created_at)
         if (mounted) setMyRequests(filtered)
@@ -1176,8 +1192,18 @@ export default function Help() {
     setResponders([])
   }, [mode, requestId])
 
-  const step1Done = !!location
-  const step2Done = !!emergencyType
+  // Harden location validation: ensure both coords are finite numbers in range (#314)
+  const step1Done = useMemo(() => {
+    if (!Array.isArray(location) || location.length < 2) return false
+    const [lat, lng] = location
+    return (
+      typeof lat === 'number' && isFinite(lat) && lat >= -90 && lat <= 90 &&
+      typeof lng === 'number' && isFinite(lng) && lng >= -180 && lng <= 180
+    )
+  }, [location])
+
+  // Memoize to prevent stale-closure ghost renders (#315)
+  const step2Done = useMemo(() => !!emergencyType, [emergencyType])
   const step3Done = true
   const currentStep = !step1Done ? 1 : requestStatus === 'idle' ? (!step2Done ? 2 : 4) : 5
 
