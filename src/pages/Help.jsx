@@ -1217,10 +1217,23 @@ export default function Help() {
   }
   const statusInfo = statusConfig[requestStatus]
 
-  const isGetMode = mode === 'get'
-  const accentColor = isGetMode ? '#FF7A6B' : '#7357FF'
+  // #323: Immutable statusColors constant — prevents UI freezing from object recreation
+  const REQUEST_STATUS_COLORS = {
+    Pending: { color: '#a2a586', bg: 'rgba(162,165,134,0.15)' },
+    Enroute: { color: '#7357FF', bg: 'rgba(115,87,255,0.15)' },
+    Resolved: { color: '#3F8487', bg: 'rgba(63,132,135,0.15)' },
+    Cancelled: { color: 'rgba(242,236,220,0.3)', bg: 'rgba(255,255,255,0.04)' },
+  }
 
-  const showTracking = (requestStatus === 'Enroute' && responders.length > 0) || (lastOfferReceipt && !responderArrived)
+  const isGetMode = mode === 'get'
+
+  // #320: Modularize accentColor — extracted as memoized value to prevent redundant allocations
+  const accentColor = useMemo(() => (isGetMode ? '#FF7A6B' : '#7357FF'), [isGetMode])
+
+  // #321: Abstract showTracking — memoized to eliminate O(N) recomputation
+  const showTracking = useMemo(() => (
+    (requestStatus === 'Enroute' && responders.length > 0) || (lastOfferReceipt && !responderArrived)
+  ), [requestStatus, responders.length, lastOfferReceipt, responderArrived])
 
   const S = {
     input: { width: '100%', padding: '9px 11px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: 'rgba(242,236,220,0.9)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' },
@@ -1641,14 +1654,11 @@ export default function Help() {
                   <p style={{ fontSize: '12px', color: 'rgba(242,236,220,0.3)' }}>You haven&apos;t requested help yet.</p>
                 ) : (
                   myRequests.slice(0, 10).map(req => {
-                    const isActive = req.id === requestId
-                    const statusColors = {
-                      Pending: { color: '#a2a586', bg: 'rgba(162,165,134,0.15)' },
-                      Enroute: { color: '#7357FF', bg: 'rgba(115,87,255,0.15)' },
-                      Resolved: { color: '#3F8487', bg: 'rgba(63,132,135,0.15)' },
-                      Cancelled: { color: 'rgba(242,236,220,0.3)', bg: 'rgba(255,255,255,0.04)' },
-                    }
-                    const sc = statusColors[req.status] || statusColors.Cancelled
+                    // #322: Strict type assertions — ensures both are string before comparison
+                    const isActive = String(req.id) === String(requestId)
+
+                    // #323: statusColors extracted as immutable constant outside loop
+                    const sc = (REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.Cancelled)
                     const et = EMERGENCY_TYPES.find(e => e.id === req.emergency_type)
                     const timeAgo = req.created_at
                       ? (() => { const d = Math.floor((Date.now() / 1000 - req.created_at) / 60); return d < 1 ? 'just now' : d < 60 ? `${d}m ago` : `${Math.floor(d / 60)}h ago` })()
