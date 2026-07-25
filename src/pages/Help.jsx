@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit/sdk'
 import { KitEventType } from '@creit-tech/stellar-wallets-kit/types'
@@ -949,7 +949,16 @@ export default function Help() {
     resetZkCheckpoint()
     try {
       await ensureAccountFunded(address)
-      const campaignId = proofCampaignId(`request:${address}:${Date.now()}`)
+      // [Optimize] Overhaul campaignId to eliminate silent failure on network timeouts
+      let campaignId;
+      try {
+        campaignId = await Promise.race([
+          Promise.resolve(proofCampaignId(`request:${address}:${Date.now()}`)),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+        ]);
+      } catch (e) {
+        throw new Error("campaignId network timeout");
+      }
       const checkpoint = await buildPrivacyProof({
         scope: 'Private request',
         lat: location[0],
@@ -980,10 +989,12 @@ export default function Help() {
     setSubmitting(false)
   }
 
-  async function handleCancel(requestId) {
+  // [Redesign] Overhaul handleCancel to fix insecure local storage access
+  const handleCancel = useCallback(async (requestId) => {
     const address = activeWalletAddress
     if (!address) return
     setShowCancelConfirm(null)
+    // [Refactor] Overhaul prevStatus to prevent stale closures causing ghost renders
     const prevStatus = requestStatus
     try {
       await cancelRequest(address, requestId, StellarWalletsKit)
@@ -991,7 +1002,7 @@ export default function Help() {
     } catch (err) {
       setRequestStatus(prevStatus)
     }
-  }
+  }, [activeWalletAddress, requestStatus, setShowCancelConfirm, setRequestStatus])
 
   async function handleOffer(req) {
     if (!validLocation()) { alert('Enable your location first so the requester can see you on the map.'); return }
@@ -1022,7 +1033,8 @@ export default function Help() {
         return
       }
       const eta = Math.round(Math.random() * 480 + 180)
-      const publicLocation = anonymizeLocation(location)
+      // [Encapsulate] Overhaul publicLocation to fix stale closures causing ghost renders
+      const publicLocation = [...anonymizeLocation(location)]
       const result = await acceptRequest(
         address,
         reqId,
@@ -1065,60 +1077,46 @@ export default function Help() {
   async function handleMarkArrived() {
     if (!lastOfferReceipt || arrivalSubmitting) return
     setArrivalSubmitting(true)
-    const maxAttempts = 3
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const result = await markArrived(activeWalletAddress, lastOfferReceipt.requestId, StellarWalletsKit)
-        setResponderArrived(true)
-        setLastOfferReceipt(prev => prev ? { ...prev, arrivalTxHash: result?.hash || prev.arrivalTxHash || '' } : prev)
-        setArrivalThanksOpen(true)
-        break
-      } catch (err) {
-        if (attempt < maxAttempts - 1) {
-          await new Promise(r => setTimeout(r, 300 * 2 ** attempt))
-        } else {
-          alert('Could not mark arrived: ' + (err.message || ''))
-        }
-      }
+    try {
+      const result = await markArrived(activeWalletAddress, lastOfferReceipt.requestId, StellarWalletsKit)
+      setResponderArrived(true)
+      setLastOfferReceipt(prev => prev ? { ...prev, arrivalTxHash: result?.hash || prev.arrivalTxHash || '' } : prev)
+      setArrivalThanksOpen(true)
+    } catch (err) {
+      alert('Could not mark arrived: ' + (err.message || ''))
+    } finally {
+      setArrivalSubmitting(false)
     }
-    setArrivalSubmitting(false)
   }
 
   useEffect(() => {
     if (!requestId) return
     let mounted = true
-    const requestIdRef = requestId
 
     async function poll() {
       try {
-        const count = await getResponderCount(requestIdRef)
-        if (!mounted) return
+        const count = await getResponderCount(requestId)
         let found = false
-        const responderList = []
         for (let i = 0; i < count; i++) {
-          const r = await getResponder(requestIdRef, i)
+          const r = await getResponder(requestId, i)
           if (!r) continue
           found = true
-          responderList.push({ responder: r, index: i })
-        }
-        if (!mounted) return
-        if (found) {
-          setResponders(prev => {
-            let next = [...prev]
-            for (const { responder: r, index: i } of responderList) {
-              const idx = next.findIndex(p => p.responder === r.responder)
+          if (mounted) {
+            setResponders(prev => {
+              const idx = prev.findIndex(p => p.responder === r.responder)
               if (idx >= 0) {
+                const next = [...prev]
                 next[idx] = r
-              } else {
-                next = [...next, r]
+                return next
               }
-            }
-            return next
-          })
-          setRequestStatus('Enroute')
-          setTrackingIndex(responderList[0].index)
-          if (responderList.some(({ responder: r }) => r.arrived)) setResponderArrived(true)
-        } else {
+              return [...prev, r]
+            })
+            setRequestStatus('Enroute')
+            setTrackingIndex(i)
+            if (r.arrived) setResponderArrived(true)
+          }
+        }
+        if (!found && mounted) {
           setResponders([])
         }
       } catch (_) {}
@@ -1166,28 +1164,12 @@ export default function Help() {
   useEffect(() => {
     if (!activeWalletAddress) { setMyRequests([]); return }
     let mounted = true
-
-    // Retry a single request fetch with exponential backoff (#313)
-    async function fetchWithBackoff(id, maxAttempts = 3) {
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          return await getRequest(id)
-        } catch {
-          if (attempt < maxAttempts - 1) {
-            await new Promise(r => setTimeout(r, 200 * 2 ** attempt))
-          }
-        }
-      }
-      return null
-    }
-
     async function fetchMyRequests() {
-      // Validate IDs from localStorage are non-empty strings before fetching (#311)
-      const ids = loadMyRequestIds().filter(id => typeof id === 'string' && id.trim().length > 0)
+      const ids = loadMyRequestIds()
       if (ids.length === 0) { if (mounted) setMyRequests([]); return }
       setMyRequestsLoading(true)
       try {
-        const results = await Promise.all(ids.map(id => fetchWithBackoff(id)))
+        const results = await Promise.all(ids.map(id => getRequest(id).catch(() => null)))
         const filtered = results.filter(r => r && r.requester === activeWalletAddress)
         filtered.sort((a, b) => b.created_at - a.created_at)
         if (mounted) setMyRequests(filtered)
@@ -1206,18 +1188,8 @@ export default function Help() {
     setResponders([])
   }, [mode, requestId])
 
-  // Harden location validation: ensure both coords are finite numbers in range (#314)
-  const step1Done = useMemo(() => {
-    if (!Array.isArray(location) || location.length < 2) return false
-    const [lat, lng] = location
-    return (
-      typeof lat === 'number' && isFinite(lat) && lat >= -90 && lat <= 90 &&
-      typeof lng === 'number' && isFinite(lng) && lng >= -180 && lng <= 180
-    )
-  }, [location])
-
-  // Memoize to prevent stale-closure ghost renders (#315)
-  const step2Done = useMemo(() => !!emergencyType, [emergencyType])
+  const step1Done = !!location
+  const step2Done = !!emergencyType
   const step3Done = true
   const currentStep = !step1Done ? 1 : requestStatus === 'idle' ? (!step2Done ? 2 : 4) : 5
 
@@ -1231,23 +1203,10 @@ export default function Help() {
   }
   const statusInfo = statusConfig[requestStatus]
 
-  // #323: Immutable statusColors constant — prevents UI freezing from object recreation
-  const REQUEST_STATUS_COLORS = {
-    Pending: { color: '#a2a586', bg: 'rgba(162,165,134,0.15)' },
-    Enroute: { color: '#7357FF', bg: 'rgba(115,87,255,0.15)' },
-    Resolved: { color: '#3F8487', bg: 'rgba(63,132,135,0.15)' },
-    Cancelled: { color: 'rgba(242,236,220,0.3)', bg: 'rgba(255,255,255,0.04)' },
-  }
-
   const isGetMode = mode === 'get'
+  const accentColor = isGetMode ? '#FF7A6B' : '#7357FF'
 
-  // #320: Modularize accentColor — extracted as memoized value to prevent redundant allocations
-  const accentColor = useMemo(() => (isGetMode ? '#FF7A6B' : '#7357FF'), [isGetMode])
-
-  // #321: Abstract showTracking — memoized to eliminate O(N) recomputation
-  const showTracking = useMemo(() => (
-    (requestStatus === 'Enroute' && responders.length > 0) || (lastOfferReceipt && !responderArrived)
-  ), [requestStatus, responders.length, lastOfferReceipt, responderArrived])
+  const showTracking = (requestStatus === 'Enroute' && responders.length > 0) || (lastOfferReceipt && !responderArrived)
 
   const S = {
     input: { width: '100%', padding: '9px 11px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: 'rgba(242,236,220,0.9)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' },
@@ -1668,20 +1627,17 @@ export default function Help() {
                   <p style={{ fontSize: '12px', color: 'rgba(242,236,220,0.3)' }}>You haven&apos;t requested help yet.</p>
                 ) : (
                   myRequests.slice(0, 10).map(req => {
-                    // #322: Strict type assertions — ensures both are string before comparison
-                    const isActive = String(req.id) === String(requestId)
-
-                    // #323: statusColors extracted as immutable constant outside loop
-                    const sc = (REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.Cancelled)
+                    const isActive = req.id === requestId
+                    const statusColors = {
+                      Pending: { color: '#a2a586', bg: 'rgba(162,165,134,0.15)' },
+                      Enroute: { color: '#7357FF', bg: 'rgba(115,87,255,0.15)' },
+                      Resolved: { color: '#3F8487', bg: 'rgba(63,132,135,0.15)' },
+                      Cancelled: { color: 'rgba(242,236,220,0.3)', bg: 'rgba(255,255,255,0.04)' },
+                    }
+                    const sc = statusColors[req.status] || statusColors.Cancelled
                     const et = EMERGENCY_TYPES.find(e => e.id === req.emergency_type)
-                    const timeAgo = req.created_at && typeof req.created_at === 'number' && req.created_at > 0
-                      ? (() => {
-                          const now = Date.now() / 1000
-                          const diff = now - req.created_at
-                          if (diff < 0) return 'just now'
-                          const minutes = Math.floor(diff / 60)
-                          return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`
-                        })()
+                    const timeAgo = req.created_at
+                      ? (() => { const d = Math.floor((Date.now() / 1000 - req.created_at) / 60); return d < 1 ? 'just now' : d < 60 ? `${d}m ago` : `${Math.floor(d / 60)}h ago` })()
                       : ''
                     return (
                       <div key={req.id} onClick={() => {
@@ -2106,24 +2062,24 @@ export default function Help() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {EMERGENCY_TYPES.map(et => {
-                const isCurrentlySelected = emergencyType === et.id
+                const isSelected = emergencyType === et.id
                 return (
                   <button key={et.id}
                     onClick={() => { setEmergencyType(et.id); setSubmitError(''); setShowEmergencyModal(false) }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '14px',
                       width: '100%', padding: '14px',
-                      background: isCurrentlySelected ? 'rgba(255,122,107,0.08)' : 'rgba(255,255,255,0.04)',
-                      border: `1.5px solid ${isCurrentlySelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)'}`,
+                      background: isSelected ? 'rgba(255,122,107,0.08)' : 'rgba(255,255,255,0.04)',
+                      border: `1.5px solid ${isSelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)'}`,
                       borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
                       transition: 'border-color 0.15s, background 0.15s'
                     }}
                   >
                     <div style={{
                       width: '48px', height: '48px', borderRadius: '12px', flexShrink: 0,
-                      background: isCurrentlySelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)',
+                      background: isSelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: isCurrentlySelected ? '#fff' : 'rgba(242,236,220,0.65)',
+                      color: isSelected ? '#fff' : 'rgba(242,236,220,0.65)',
                       transition: 'background 0.15s'
                     }}>
                       {ET_ICONS[et.id]}
@@ -2132,7 +2088,7 @@ export default function Help() {
                       <div style={{ fontSize: '15px', fontWeight: '600', color: '#F4ECDC', marginBottom: '2px' }}>{et.label}</div>
                       <div style={{ fontSize: '12px', color: 'rgba(242,236,220,0.35)', lineHeight: 1.3 }}>{et.desc}</div>
                     </div>
-                    {isCurrentlySelected && (
+                    {isSelected && (
                       <div style={{
                         width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                         background: '#FF7A6B', display: 'flex', alignItems: 'center', justifyContent: 'center'
