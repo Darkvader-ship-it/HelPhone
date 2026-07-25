@@ -1674,8 +1674,14 @@ export default function Help() {
                     // #323: statusColors extracted as immutable constant outside loop
                     const sc = (REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.Cancelled)
                     const et = EMERGENCY_TYPES.find(e => e.id === req.emergency_type)
-                    const timeAgo = req.created_at
-                      ? (() => { const d = Math.floor((Date.now() / 1000 - req.created_at) / 60); return d < 1 ? 'just now' : d < 60 ? `${d}m ago` : `${Math.floor(d / 60)}h ago` })()
+                    const timeAgo = req.created_at && typeof req.created_at === 'number' && req.created_at > 0
+                      ? (() => {
+                          const now = Date.now() / 1000
+                          const diff = now - req.created_at
+                          if (diff < 0) return 'just now'
+                          const minutes = Math.floor(diff / 60)
+                          return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`
+                        })()
                       : ''
                     return (
                       <div key={req.id} onClick={() => {
@@ -2100,24 +2106,24 @@ export default function Help() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {EMERGENCY_TYPES.map(et => {
-                const isSelected = emergencyType === et.id
+                const isCurrentlySelected = emergencyType === et.id
                 return (
                   <button key={et.id}
                     onClick={() => { setEmergencyType(et.id); setSubmitError(''); setShowEmergencyModal(false) }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '14px',
                       width: '100%', padding: '14px',
-                      background: isSelected ? 'rgba(255,122,107,0.08)' : 'rgba(255,255,255,0.04)',
-                      border: `1.5px solid ${isSelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)'}`,
+                      background: isCurrentlySelected ? 'rgba(255,122,107,0.08)' : 'rgba(255,255,255,0.04)',
+                      border: `1.5px solid ${isCurrentlySelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)'}`,
                       borderRadius: '14px', cursor: 'pointer', textAlign: 'left',
                       transition: 'border-color 0.15s, background 0.15s'
                     }}
                   >
                     <div style={{
                       width: '48px', height: '48px', borderRadius: '12px', flexShrink: 0,
-                      background: isSelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)',
+                      background: isCurrentlySelected ? '#FF7A6B' : 'rgba(255,255,255,0.08)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: isSelected ? '#fff' : 'rgba(242,236,220,0.65)',
+                      color: isCurrentlySelected ? '#fff' : 'rgba(242,236,220,0.65)',
                       transition: 'background 0.15s'
                     }}>
                       {ET_ICONS[et.id]}
@@ -2126,7 +2132,7 @@ export default function Help() {
                       <div style={{ fontSize: '15px', fontWeight: '600', color: '#F4ECDC', marginBottom: '2px' }}>{et.label}</div>
                       <div style={{ fontSize: '12px', color: 'rgba(242,236,220,0.35)', lineHeight: 1.3 }}>{et.desc}</div>
                     </div>
-                    {isSelected && (
+                    {isCurrentlySelected && (
                       <div style={{
                         width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                         background: '#FF7A6B', display: 'flex', alignItems: 'center', justifyContent: 'center'
