@@ -4,31 +4,27 @@ import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
+import { normalizeBase64 } from './base64Utils.js'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
 
-app.use(cors())
+// Solves Issue 1: Restrict CORS policy on ZK Prover Server
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['https://helphone.com', 'https://staging.helphone.com'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}))
 app.use(express.json({ limit: '1mb' }))
 
 let _noir = null
 let _backend = null
 let _ready = false
 let _readyPromise = null
-
-function normalizeBase64(input) {
-  if (typeof input !== 'string') throw new Error('bytecode must be a string')
-  let value = input.trim()
-  const commaIndex = value.indexOf(',')
-  if (commaIndex !== -1 && /^data:.*;base64/i.test(value.slice(0, commaIndex))) {
-    value = value.slice(commaIndex + 1)
-  }
-  value = value.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/')
-  const remainder = value.length % 4
-  if (remainder === 1) throw new Error('invalid base64 length')
-  if (remainder > 0) value += '='.repeat(4 - remainder)
-  return value
-}
 
 async function ensureProver() {
   if (_ready) return
