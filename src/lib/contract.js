@@ -6,12 +6,24 @@ import {
 const DEFAULT_CONTRACT_ID = 'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY'
 const CONTRACT_ID = import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID
 const RPC_URL = 'https://soroban-testnet.stellar.org'
-const FRIENDBOT_URL = 'https://friendbot.stellar.org'
+const DEFAULT_FRIENDBOT_URL = 'https://friendbot.stellar.org'
+const FRIENDBOT_URL = import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL
 const NETWORK = Networks.TESTNET
 
 const server = new rpc.Server(RPC_URL, { timeout: 30_000 })
 const contract = new Contract(CONTRACT_ID)
+
+// ── Coordinate encoding ─────────────────────────────────────────
+// The contract stores lat/lng as fixed-point i32: degrees * COORD_SCALE.
 const COORD_SCALE = 1_000_000
+const LAT_MIN = -90
+const LAT_MAX = 90
+const LNG_MIN = -180
+const LNG_MAX = 180
+const LNG_SPAN = LNG_MAX - LNG_MIN
+// Bounds of the on-chain i32 the scaled value has to fit into.
+const I32_MIN = -2_147_483_648
+const I32_MAX = 2_147_483_647
 
 /** Safely convert a Soroban contract value to a JavaScript number without precision loss.
  *  Handles BigInt, number, and string inputs. Returns NaN for unconvertible values. */
@@ -27,16 +39,58 @@ function safeToNumber(val) {
   return NaN
 }
 
-/** Clamp a longitude value to [-180, 180]. */
+/** Clamp a value into an inclusive range. */
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
+/** Wrap a longitude value into [LNG_MIN, LNG_MAX]. */
 function clampLng(lng) {
-  if (lng < -180 || lng > 180) {
-    return ((lng + 180) % 360 + 360) % 360 - 180
+  if (lng < LNG_MIN || lng > LNG_MAX) {
+    return ((lng - LNG_MIN) % LNG_SPAN + LNG_SPAN) % LNG_SPAN + LNG_MIN
   }
   return lng
 }
 
-// Dummy source for read-only simulations (no sequence number needed)
-const _readSource = new Account(Keypair.random().publicKey(), '0')
+/** Decode an on-chain fixed-point coordinate into degrees. NaN if unconvertible. */
+function decodeCoord(raw) {
+  const num = safeToNumber(raw)
+  return Number.isFinite(num) ? num / COORD_SCALE : NaN
+}
+
+/** Decode + clamp a latitude, or null when the raw value is unusable. */
+function decodeLat(raw) {
+  const lat = decodeCoord(raw)
+  return Number.isFinite(lat) ? clamp(lat, LAT_MIN, LAT_MAX) : null
+}
+
+/** Decode + wrap a longitude, or null when the raw value is unusable. */
+function decodeLng(raw) {
+  const lng = decodeCoord(raw)
+  return Number.isFinite(lng) ? clampLng(lng) : null
+}
+
+/** Encode degrees into the fixed-point i32 the contract expects.
+ *  Throws instead of silently writing a value the contract would truncate. */
+function encodeCoord(value, label) {
+  const scaled = Math.round(guardNaN(value, label) * COORD_SCALE)
+  if (scaled < I32_MIN || scaled > I32_MAX) {
+    throw new Error(`${label} is outside the range the contract can store (got ${value})`)
+  }
+  return scaled
+}
+
+// Dummy source for read-only simulations. TransactionBuilder.build() increments the
+// source account's sequence number, so a single shared Account drifts once more than
+// one read has run. Each simulation gets a fresh Account pinned to sequence 0 instead;
+// the keypair is generated lazily so importing this module never touches crypto.
+const READ_SOURCE_SEQUENCE = '0'
+let _readSourceAddress = null
+
+function _readSource() {
+  if (!_readSourceAddress) _readSourceAddress = Keypair.random().publicKey()
+  return new Account(_readSourceAddress, READ_SOURCE_SEQUENCE)
+}
 
 function normalizeBase64(input, label = 'Base64 value') {
   if (typeof input !== 'string') {
@@ -75,13 +129,11 @@ function scv(val, opts) {
 
 function mapRequest(raw) {
   const STATUS = ['Pending', 'Enroute', 'Resolved', 'Cancelled']
-  const lat = safeToNumber(raw.lat) / COORD_SCALE
-  const lng = safeToNumber(raw.lng) / COORD_SCALE
   return {
     id: raw.id ? safeToNumber(raw.id) : raw.id,
     requester: raw.requester,
-    lat: Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : null,
-    lng: Number.isFinite(lng) ? clampLng(lng) : null,
+    lat: decodeLat(raw.lat),
+    lng: decodeLng(raw.lng),
     emergency_type: raw.emergency_type,
     nickname: raw.nickname,
     contact: raw.contact,
@@ -92,12 +144,10 @@ function mapRequest(raw) {
 }
 
 function mapResponder(raw) {
-  const lat = safeToNumber(raw.lat) / COORD_SCALE
-  const lng = safeToNumber(raw.lng) / COORD_SCALE
   return {
     responder: raw.responder,
-    lat: Number.isFinite(lat) ? Math.max(-90, Math.min(90, lat)) : null,
-    lng: Number.isFinite(lng) ? clampLng(lng) : null,
+    lat: decodeLat(raw.lat),
+    lng: decodeLng(raw.lng),
     eta_seconds: raw.eta_seconds,
     arrived: raw.arrived,
     responded_at: safeToNumber(raw.responded_at),
@@ -106,7 +156,7 @@ function mapResponder(raw) {
 
 // ── Read helper ─────────────────────────────────────────────────
 async function simulateRead(call) {
-  const tx = new TransactionBuilder(_readSource, { fee: BASE_FEE, networkPassphrase: NETWORK })
+  const tx = new TransactionBuilder(_readSource(), { fee: BASE_FEE, networkPassphrase: NETWORK })
     .addOperation(call)
     .setTimeout(30)
     .build()
@@ -207,11 +257,26 @@ export async function checkAccount(address) {
   }
 }
 
+/** Build the friendbot funding URL for an address.
+ *  Uses the URL API so an override that already carries a path, a trailing slash or
+ *  its own query string still yields a well-formed request in every browser, rather
+ *  than the `?` concatenation that only worked for the bare default host. */
+function friendbotUrl(address) {
+  try {
+    const url = new URL(FRIENDBOT_URL)
+    url.searchParams.set('addr', address)
+    return url.toString()
+  } catch {
+    const separator = FRIENDBOT_URL.includes('?') ? '&' : '?'
+    return `${FRIENDBOT_URL}${separator}addr=${encodeURIComponent(address)}`
+  }
+}
+
 export async function ensureAccountFunded(address) {
   if (!address) throw new Error('Wallet address is not available yet')
   if (await checkAccount(address)) return true
 
-  const res = await fetch(`${FRIENDBOT_URL}?addr=${encodeURIComponent(address)}`)
+  const res = await fetch(friendbotUrl(address))
   if (!res.ok) {
     let message = 'Could not fund Stellar testnet account'
     try {
@@ -375,8 +440,8 @@ export async function createRequest(requester, lat, lng, emergencyType, nickname
       function: 'create_request',
       args: [
         scv(requester, { type: 'address' }),
-        scv(Math.round(guardNaN(lat, 'lat') * COORD_SCALE), { type: 'i32' }),
-        scv(Math.round(guardNaN(lng, 'lng') * COORD_SCALE), { type: 'i32' }),
+        scv(encodeCoord(lat, 'lat'), { type: 'i32' }),
+        scv(encodeCoord(lng, 'lng'), { type: 'i32' }),
         scv(emergencyType, { type: 'string' }),
         scv(nickname, { type: 'string' }),
         scv(contact, { type: 'string' }),
@@ -402,8 +467,8 @@ export async function acceptRequest(responder, requestId, lat, lng, etaSeconds, 
       args: [
         scv(responder, { type: 'address' }),
         scv(guardNaN(Number(requestId), 'requestId'), { type: 'u64' }),
-        scv(Math.round(guardNaN(lat, 'lat') * COORD_SCALE), { type: 'i32' }),
-        scv(Math.round(guardNaN(lng, 'lng') * COORD_SCALE), { type: 'i32' }),
+        scv(encodeCoord(lat, 'lat'), { type: 'i32' }),
+        scv(encodeCoord(lng, 'lng'), { type: 'i32' }),
         scv(guardNaN(Number(etaSeconds), 'etaSeconds'), { type: 'u32' }),
       ],
     }))
@@ -456,8 +521,8 @@ export async function updateLocation(responder, requestId, lat, lng) {
       args: [
         scv(responder, { type: 'address' }),
         scv(Number(requestId), { type: 'u64' }),
-        scv(Math.round(guardNaN(lat, 'lat') * COORD_SCALE), { type: 'i32' }),
-        scv(Math.round(guardNaN(lng, 'lng') * COORD_SCALE), { type: 'i32' }),
+        scv(encodeCoord(lat, 'lat'), { type: 'i32' }),
+        scv(encodeCoord(lng, 'lng'), { type: 'i32' }),
       ],
     }))
     .setTimeout(30)
