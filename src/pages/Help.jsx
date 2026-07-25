@@ -1065,46 +1065,60 @@ export default function Help() {
   async function handleMarkArrived() {
     if (!lastOfferReceipt || arrivalSubmitting) return
     setArrivalSubmitting(true)
-    try {
-      const result = await markArrived(activeWalletAddress, lastOfferReceipt.requestId, StellarWalletsKit)
-      setResponderArrived(true)
-      setLastOfferReceipt(prev => prev ? { ...prev, arrivalTxHash: result?.hash || prev.arrivalTxHash || '' } : prev)
-      setArrivalThanksOpen(true)
-    } catch (err) {
-      alert('Could not mark arrived: ' + (err.message || ''))
-    } finally {
-      setArrivalSubmitting(false)
+    const maxAttempts = 3
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const result = await markArrived(activeWalletAddress, lastOfferReceipt.requestId, StellarWalletsKit)
+        setResponderArrived(true)
+        setLastOfferReceipt(prev => prev ? { ...prev, arrivalTxHash: result?.hash || prev.arrivalTxHash || '' } : prev)
+        setArrivalThanksOpen(true)
+        break
+      } catch (err) {
+        if (attempt < maxAttempts - 1) {
+          await new Promise(r => setTimeout(r, 300 * 2 ** attempt))
+        } else {
+          alert('Could not mark arrived: ' + (err.message || ''))
+        }
+      }
     }
+    setArrivalSubmitting(false)
   }
 
   useEffect(() => {
     if (!requestId) return
     let mounted = true
+    const requestIdRef = requestId
 
     async function poll() {
       try {
-        const count = await getResponderCount(requestId)
+        const count = await getResponderCount(requestIdRef)
+        if (!mounted) return
         let found = false
+        const responderList = []
         for (let i = 0; i < count; i++) {
-          const r = await getResponder(requestId, i)
+          const r = await getResponder(requestIdRef, i)
           if (!r) continue
           found = true
-          if (mounted) {
-            setResponders(prev => {
-              const idx = prev.findIndex(p => p.responder === r.responder)
-              if (idx >= 0) {
-                const next = [...prev]
-                next[idx] = r
-                return next
-              }
-              return [...prev, r]
-            })
-            setRequestStatus('Enroute')
-            setTrackingIndex(i)
-            if (r.arrived) setResponderArrived(true)
-          }
+          responderList.push({ responder: r, index: i })
         }
-        if (!found && mounted) {
+        if (!mounted) return
+        if (found) {
+          setResponders(prev => {
+            let next = [...prev]
+            for (const { responder: r, index: i } of responderList) {
+              const idx = next.findIndex(p => p.responder === r.responder)
+              if (idx >= 0) {
+                next[idx] = r
+              } else {
+                next = [...next, r]
+              }
+            }
+            return next
+          })
+          setRequestStatus('Enroute')
+          setTrackingIndex(responderList[0].index)
+          if (responderList.some(({ responder: r }) => r.arrived)) setResponderArrived(true)
+        } else {
           setResponders([])
         }
       } catch (_) {}
