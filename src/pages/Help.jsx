@@ -619,6 +619,9 @@ export default function Help() {
   const styleSelectorRef = useRef(null)
   const profileRef = useRef(null)
   const sidebarRef = useRef(null)
+  const handleOfferBusy = useRef(false)
+  const handleOfferMounted = useRef(true)
+  const handleOfferSeq = useRef(0)
 
   useEffect(() => {
     if (!location?.[0] || !location?.[1]) return
@@ -653,6 +656,10 @@ export default function Help() {
       offState()
       offDisconnect()
     }
+  }, [])
+
+  useEffect(() => {
+    return () => { handleOfferMounted.current = false }
   }, [])
 
   useEffect(() => {
@@ -1009,27 +1016,32 @@ export default function Help() {
   }, [activeWalletAddress, requestStatus, setShowCancelConfirm, setRequestStatus])
 
   async function handleOffer(req) {
+    if (handleOfferBusy.current) return
     if (!validLocation()) { alert('Enable your location first so the requester can see you on the map.'); return }
     const reqId = Number(req.id)
     if (!Number.isFinite(reqId)) { alert('Invalid request'); return }
     const fresh = await refreshPendingRequest(reqId)
     if (!fresh) return
     const address = activeWalletAddress || await promptWalletConnection()
-    if (!address) {
-      return
-    }
+    if (!address) return
+
+    handleOfferBusy.current = true
+    const seq = ++handleOfferSeq.current
+    const curLocation = [...location]
     setOfferSubmitting(true)
     resetZkCheckpoint()
     try {
       await ensureAccountFunded(address)
+      if (seq !== handleOfferSeq.current || !handleOfferMounted.current) return
       const checkpoint = await buildPrivacyProof({
         scope: 'Private responder',
-        lat: location[0],
-        lng: location[1],
+        lat: curLocation[0],
+        lng: curLocation[1],
         campaignId: proofCampaignId(`offer:${reqId}`),
         address,
         radiusMeters: 3000,
       })
+      if (seq !== handleOfferSeq.current || !handleOfferMounted.current) return
       const latest = await refreshPendingRequest(reqId)
       if (!latest) {
         pushZkLog('Request changed before Stellar confirmation')
@@ -1037,8 +1049,7 @@ export default function Help() {
         return
       }
       const eta = Math.round(Math.random() * 480 + 180)
-      // [Encapsulate] Overhaul publicLocation to fix stale closures causing ghost renders
-      const publicLocation = [...anonymizeLocation(location)]
+      const publicLocation = [...anonymizeLocation(curLocation)]
       const result = await acceptRequest(
         address,
         reqId,
@@ -1046,6 +1057,7 @@ export default function Help() {
         eta,
         StellarWalletsKit
       )
+      if (!handleOfferMounted.current) return
       setSelectedRequest(null)
       setLastOfferReceipt({
         requestId: reqId,
@@ -1057,11 +1069,13 @@ export default function Help() {
       })
       setZkProof(prev => prev ? { ...prev, requestId: reqId, txHash: result.hash || '' } : prev)
       await recordZkCheckpoint(address, 'private_responder_proof', result.hash || '', checkpoint)
+      if (!handleOfferMounted.current) return
       setOpenRequests(prev => prev.filter(r => r.id !== reqId))
       if (latest.lat != null && latest.lng != null) {
         setRequesterLocation([latest.lat, latest.lng])
       }
     } catch (err) {
+      if (!handleOfferMounted.current) return
       if (isRequestStatusRace(err)) {
         removeOpenRequest(reqId)
         setZkStatus('proved')
@@ -1074,7 +1088,8 @@ export default function Help() {
       setZkError(err.message || 'ZK proof failed')
       alert('Could not accept request: ' + (err.message || ''))
     } finally {
-      setOfferSubmitting(false)
+      if (handleOfferMounted.current) setOfferSubmitting(false)
+      handleOfferBusy.current = false
     }
   }
 
