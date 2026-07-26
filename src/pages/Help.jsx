@@ -582,6 +582,7 @@ export default function Help() {
   const [searchSuggestLoading, setSearchSuggestLoading] = useState(false)
   const [activeSuggestion, setActiveSuggestion] = useState(-1)
   const searchBoxRef = useRef(null)
+  const searchAbortRef = useRef(null)
 
   const [requestId, setRequestId] = useState(null)
   const [requestStatus, setRequestStatus] = useState('idle')
@@ -786,6 +787,11 @@ export default function Help() {
 
   async function promptWalletConnection() {
     try {
+      // Defer opening the modal to the next macrotask so the click handler
+      // that triggered this returns immediately instead of holding the main
+      // thread while the wallet-kit UI mounts (source of the inconsistent
+      // cross-browser behavior, worst on Safari/Firefox).
+      await new Promise((resolve) => setTimeout(resolve, 0))
       const { address } = await StellarWalletsKit.authModal()
       if (address) {
         setWalletAddress(address)
@@ -803,12 +809,19 @@ export default function Help() {
     e.preventDefault()
     const q = searchQuery.trim()
     if (!q) return
+    // Cancel any in-flight search before starting a new one, instead of
+    // letting overlapping requests race and both allocate/parse response
+    // bodies that only the latest result actually needs.
+    searchAbortRef.current?.abort()
+    const controller = new AbortController()
+    searchAbortRef.current = controller
     setSearchError('')
     setSearchSuggestions([])
     setSearchLoading(true)
     try {
       const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}&limit=1`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}&limit=1`,
+        { signal: controller.signal }
       )
       const data = await res.json()
       if (!data.features?.length) { setSearchError('Place not found.'); setSearchLoading(false); return }
@@ -816,13 +829,17 @@ export default function Help() {
       setLocation([lat, lng])
       setLocationError('')
       setSearchSuggestions([])
-    } catch { setSearchError('Search failed. Check your connection.') }
+    } catch (err) {
+      if (err?.name !== 'AbortError') setSearchError('Search failed. Check your connection.')
+      else return
+    }
     setSearchLoading(false)
   }
 
   function selectSearchSuggestion(feature) {
-    if (!feature?.center) return
+    if (!Array.isArray(feature?.center) || feature.center.length !== 2) return
     const [lng, lat] = feature.center
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
     setLocation([lat, lng])
     setLocationError('')
     setSearchQuery(feature.place_name || feature.text || '')
