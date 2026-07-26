@@ -731,17 +731,20 @@ export default function Help() {
   useEffect(() => {
     if (mode !== 'offer') return
     let mounted = true
+    let loading = false
 
     async function load() {
+      if (loading) return
+      loading = true
       try {
         const ids = await getActiveRequests()
-        const requests = []
-        for (const id of ids) {
-          const req = await getRequest(id)
-          if (req && req.status === 'Pending') {
-            requests.push({ ...req, id })
-          }
-        }
+        const requests = await Promise.all(
+          ids.map(id =>
+            getRequest(id)
+              .then(req => (req && req.status === 'Pending') ? { ...req, id } : null)
+              .catch(() => null)
+          )
+        ).then(results => results.filter(Boolean))
         if (mounted) {
           setOpenRequests(requests)
           setSelectedRequest(current => {
@@ -750,6 +753,7 @@ export default function Help() {
           })
         }
       } catch (_) {}
+      loading = false
     }
 
     load()

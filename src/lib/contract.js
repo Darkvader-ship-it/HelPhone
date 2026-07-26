@@ -201,7 +201,7 @@ export async function getResponder(requestId, index) {
   return raw ? { id: `${requestId}-${index}`, ...mapResponder(raw) } : null
 }
 
-export async function getActiveRequests(max = 50) {
+export async function getActiveRequests(max = 500) {
   const sim = await simulateRead(
     contract.call('get_active_requests')
   )
