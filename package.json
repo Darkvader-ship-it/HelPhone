@@ -11,7 +11,8 @@
     "dev:all": "node scripts/dev.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -21,8 +22,12 @@
     "node": "22.x"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.16"
+    "jsdom": "^29.1.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@aztec/bb.js": "^0.87.9",
