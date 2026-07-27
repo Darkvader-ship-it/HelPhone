@@ -39,6 +39,7 @@ pub enum VaultError {
     VerifierNotSet = 5,
     TokenNotSet = 6,
     RecipientMismatch = 7,
+    Overflow = 8,
 }
 
 #[contractevent(topics = ["claimed"], data_format = "map")]
@@ -193,10 +194,14 @@ impl AegisVault {
         let token_client = token::TokenClient::new(&env, &token_addr);
         token_client.transfer(&funder, &env.current_contract_address(), &amount);
 
-        // Update campaign balance.
+        // Update campaign balance safely.
+        if amount <= 0 {
+            return Err(VaultError::InvalidPublicInputs);
+        }
         let camp_key = (key_campaign_prefix(), campaign_id.clone());
         let current: i128 = env.storage().instance().get(&camp_key).unwrap_or(0i128);
-        env.storage().instance().set(&camp_key, &(current + amount));
+        let new_balance = current.checked_add(amount).ok_or(VaultError::Overflow)?;
+        env.storage().instance().set(&camp_key, &new_balance);
         let zone_key = (key_zone_prefix(), campaign_id.clone());
         env.storage().instance().set(&zone_key, &public_inputs_prefix);
 
@@ -295,5 +300,16 @@ impl AegisVault {
     pub fn is_claimed(env: Env, nullifier: BytesN<32>) -> bool {
         let nf_key = (key_nullifier_prefix(), nullifier);
         env.storage().instance().has(&nf_key)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_vault_error_overflow() {
+        let err = VaultError::Overflow;
+        assert_eq!(err as u32, 8);
     }
 }
