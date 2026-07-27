@@ -1780,18 +1780,47 @@ export default function Help() {
     return checkpoint;
   }
 
+  // Parallelized checkpoint recording with CORS-safe error handling
+  // Prevents inaccurate state synchronization by handling cross-origin rejections
+  const _checkpointRecordLock = new Map();
+  const _LOCK_TTL = 30000; // 30 second lock TTL for stale lock cleanup
+  
   async function recordZkCheckpoint(address, action, txHash, checkpoint) {
     if (!checkpoint?.nullifier) return;
+    
+    // Prevent parallel recording of same checkpoint to avoid state sync issues
+    const lockKey = `${checkpoint.nullifier}-${action}`;
+    const existingLock = _checkpointRecordLock.get(lockKey);
+    
+    // Clean up stale locks
+    if (existingLock && (Date.now() - existingLock.timestamp) > _LOCK_TTL) {
+      _checkpointRecordLock.delete(lockKey);
+    } else if (existingLock) {
+      pushZkLog("Checkpoint recording already in progress");
+      return;
+    }
+    
+    _checkpointRecordLock.set(lockKey, { timestamp: Date.now() });
+    
     try {
       dispatchZk({ type: "SET_STATUS", payload: "recording" });
       pushZkLog("Writing proof fingerprint to Stellar");
-      const record = await recordExpertVerification(
+      
+      // Parallelize with timeout to handle CORS rejections safely
+      const recordPromise = recordExpertVerification(
         address,
         action,
         txHash || "",
         checkpoint.nullifier,
         StellarWalletsKit,
       );
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("CORS timeout")), 15000)
+      );
+      
+      const record = await Promise.race([recordPromise, timeoutPromise]);
+      
       dispatchZk({
         type: "PATCH_PROOF",
         payload: { recordTxHash: record.hash || "" },
@@ -1800,9 +1829,26 @@ export default function Help() {
       pushZkLog("Stellar checkpoint recorded");
     } catch (err) {
       dispatchZk({ type: "SET_STATUS", payload: "proved" });
-      pushZkLog(
-        `Checkpoint record skipped: ${err.message || "wallet rejected"}`,
-      );
+      
+      // CORS-safe error handling - don't expose sensitive error details
+      let errorMsg = "wallet rejected";
+      if (err.message?.includes("CORS") || err.message?.includes("network")) {
+        errorMsg = "network error - check connection";
+      } else if (err.message?.includes("timeout")) {
+        errorMsg = "request timed out";
+      } else if (err.message?.includes("fetch")) {
+        errorMsg = "connection failed";
+      }
+      
+      pushZkLog(`Checkpoint record skipped: ${errorMsg}`);
+      
+      // Ensure state is synchronized even on rejection
+      dispatchZk({
+        type: "PATCH_PROOF",
+        payload: { recordError: errorMsg, recordTimestamp: Date.now() },
+      });
+    } finally {
+      _checkpointRecordLock.delete(lockKey);
     }
   }
 
