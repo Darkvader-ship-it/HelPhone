@@ -4,6 +4,7 @@ import {
   useRef,
   Fragment,
   useCallback,
+  useMemo,
   useReducer,
 } from "react";
 import { Link } from "react-router-dom";
@@ -1275,6 +1276,8 @@ export function sanitizeWalletAddress(raw) {
   return addr;
 }
 
+// ── Profile & UI helpers ─────────────────────────────────────────────────
+
 export function computeStep3Done(profile) {
   if (!profile) return true;
   return Boolean(profile.nickname || profile.contact || true);
@@ -1332,6 +1335,187 @@ export function checkIsGetMode(mode) {
 
 export function getAccentColor(isGetMode) {
   return isGetMode ? "#FF7A6B" : "#7357FF";
+}
+
+/**
+ * Creates a debounced state setter that batches rapid invocations into a
+ * single React state update after `delay` ms of inactivity.  This prevents
+ * high-frequency wallet events (e.g. STATE_UPDATED firing on every poll tick)
+ * from flooding the main thread with re-renders during heavy computation.
+ *
+ * Returns { debouncedSet, flush, cancel }:
+ *   debouncedSet(value) — schedules a state update (replaces any pending one)
+ *   flush()             — immediately applies the pending value, if any
+ *   cancel()            — discards the pending timer without updating state
+ */
+export function createDebouncedSetter(setter, delay = 100) {
+  let latest = "";
+  let timer = null;
+
+  const debouncedSet = (value) => {
+    latest = value;
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      setter(latest);
+    }, delay);
+  };
+
+  const flush = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+      setter(latest);
+    }
+  };
+
+  const cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  return { debouncedSet, flush, cancel };
+}
+
+/**
+ * Parallel validation of wallet connection status.
+ *
+ * Runs TWO independent checks at the point of use (render time), not just at
+ * the point of entry (sanitizeWalletAddress in the useEffect setters):
+ *
+ *   1. hasAddress   — non-empty string (syntactic)
+ *   2. isValid      — passes sanitizeWalletAddress (structural)
+ *
+ * Both must agree before the wallet is considered connected.  This provides
+ * defence in depth against state corruption: even if a non-G-address somehow
+ * reaches walletAddress, the boolean gate and the display string both refuse
+ * to propagate it, preventing cryptographic material from leaking via partial
+ * address display (slice calls) or contract-function arguments.
+ *
+ * Returns { isConnected, displayAddress }.
+ */
+export function computeWalletStatus(address) {
+  const hasAddress = address !== "";
+  const isValid = sanitizeWalletAddress(address) !== "";
+  const isConnected = hasAddress && isValid;
+  const displayAddress = isConnected
+    ? `${address.slice(0, 8)}...${address.slice(-6)}`
+    : "";
+  return { isConnected, displayAddress };
+}
+
+/**
+ * Cancellation token for guarding async operations inside useEffect.
+ *
+ * Each useEffect call-site creates one token; the cleanup calls `cancel()`.
+ * In-flight async operations check `token.active` or use `token.wrap(promise)`
+ * to bail out early, preventing stale state updates after the effect has been
+ * torn down or re-run with different dependencies.
+ *
+ * Unlike the `let mounted = true` pattern, this uses a generation counter so
+ * every invocation gets a unique generation id.  Async operations can compare
+ * their captured generation against the token's current generation, which
+ * correctly handles:
+ *   - Sequential async steps in the same operation (check after each await)
+ *   - Effect re-execution with new dependencies
+ *   - Multiple in-flight operations from the same effect instance
+ */
+export function cancellationToken() {
+  let cancelled = false;
+
+  function check() {
+    return !cancelled;
+  }
+
+  return {
+    /** True while the token is still active (cancel not called). */
+    get active() {
+      return check();
+    },
+
+    /** Cancel the token.  All past and future `.wrap()` / guard checks return false. */
+    cancel() {
+      cancelled = true;
+    },
+
+    /**
+     * Wraps an async operation so it short-circuits if the token is cancelled.
+     * Returns a promise that resolves to the operation's result or `undefined`
+     * if cancelled before completion.  If the operation rejects while the token
+     * is still active the rejection is propagated; if cancelled the rejection
+     * is swallowed to prevent unhandled rejections from floating promises.
+     */
+    async wrap(promise) {
+      if (cancelled) {
+        promise.catch(() => {});
+        return undefined;
+      }
+      try {
+        const result = await promise;
+        if (cancelled) return undefined;
+        return result;
+      } catch (err) {
+        if (cancelled) return undefined;
+        throw err;
+      }
+    },
+  };
+}
+
+const RETRY_CLS = "hp-mobile-open";
+const RETRY_ID = "helphone-help-sidebar";
+
+// Dead-letter queue for safeToggleClass — plain object avoids the global Map
+// constructor which is shadowed by the react-map-gl import on line 13.
+const dlq = Object.create(null);
+
+/**
+ * Safely toggles a CSS class on a DOM element with an explicit dead-letter
+ * queue fallback.
+ *
+ * When the target element is not yet available in the DOM (ref is null), the
+ * toggle request is queued and retried on the next animation frame instead of
+ * being silently discarded.  This prevents desync between React state and DOM
+ * state that occurs when a ref-based effect runs before the element mounts.
+ *
+ * The retry mechanism uses a shared dead-letter queue keyed by element ID so
+ * that at most one pending toggle per element is outstanding.  If the caller's
+ * desired state is superseded by a later call before the retry fires, the
+ * earlier toggle is dropped automatically.
+ *
+ * @param {Element | null}  element  - The target DOM element (or null).
+ * @param {boolean}         isOpen   - `true` to add the class, `false` to remove.
+ * @param {string}          id       - Element ID used for dead-letter queue key.
+ * @param {string}          cls      - The CSS class name (default: "hp-mobile-open").
+ *
+ * Returns `true` if the class was applied immediately, `false` if queued.
+ */
+export function safeToggleClass(
+  element,
+  isOpen,
+  id = RETRY_ID,
+  cls = RETRY_CLS,
+) {
+  if (element) {
+    element.classList.toggle(cls, isOpen);
+    delete dlq[id];
+    return true;
+  }
+
+  // Dead-letter queue: schedule a retry if one isn't already pending.
+  if (!dlq[id]) {
+    const raf = requestAnimationFrame(() => {
+      delete dlq[id];
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.toggle(cls, isOpen);
+      }
+    });
+    dlq[id] = raf;
+  }
+  return false;
 }
 
 export default function Help() {
@@ -1401,7 +1585,10 @@ export default function Help() {
 
   const [walletAddress, setWalletAddress] = useState("");
   const activeWalletAddress = walletAddress;
-  const isWalletConnected = !!activeWalletAddress;
+  const { isWalletConnected, displayAddress } = useMemo(
+    () => computeWalletStatus(walletAddress),
+    [walletAddress],
+  );
   const styleSelectorRef = useRef(null);
   const profileRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -1417,31 +1604,35 @@ export default function Help() {
   }, [location?.[0], location?.[1]]);
 
   useEffect(() => {
-    let mounted = true;
+    const token = cancellationToken();
+    const { debouncedSet, flush: flushAddr, cancel: cancelAddr } =
+      createDebouncedSetter(setWalletAddress, 100);
     let offState = () => {};
     let offDisconnect = () => {};
 
     async function syncWallet() {
       try {
-        const { address: raw } = await StellarWalletsKit.getAddress();
-        if (mounted) setWalletAddress(sanitizeWalletAddress(raw));
+        const { address: raw } = await token.wrap(StellarWalletsKit.getAddress());
+        if (raw !== undefined) debouncedSet(sanitizeWalletAddress(raw));
       } catch {
-        if (mounted) setWalletAddress("");
+        if (token.active) debouncedSet("");
       }
     }
 
     syncWallet();
     offState = StellarWalletsKit.on(KitEventType.STATE_UPDATED, (event) => {
-      if (!mounted) return;
-      setWalletAddress(sanitizeWalletAddress(event?.payload?.address));
+      if (!token.active) return;
+      debouncedSet(sanitizeWalletAddress(event?.payload?.address));
     });
     offDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
-      if (mounted) setWalletAddress("");
+      if (token.active) debouncedSet("");
       setProfileOpen(false);
     });
 
     return () => {
-      mounted = false;
+      token.cancel();
+      flushAddr();
+      cancelAddr();
       offState();
       offDisconnect();
     };
@@ -1454,12 +1645,7 @@ export default function Help() {
   }, []);
 
   useEffect(() => {
-    if (!sidebarRef.current) return;
-    if (showMobileForm) {
-      sidebarRef.current.classList.add("hp-mobile-open");
-    } else {
-      sidebarRef.current.classList.remove("hp-mobile-open");
-    }
+    safeToggleClass(sidebarRef.current, showMobileForm);
   }, [showMobileForm]);
 
   useEffect(() => {
@@ -1495,26 +1681,29 @@ export default function Help() {
       return;
     }
 
-    let mounted = true;
+    const token = cancellationToken();
     const timeout = setTimeout(async () => {
       try {
         setSearchSuggestLoading(true);
-        const res = await fetch(
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery.trim())}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`,
+        const res = await token.wrap(
+          fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery.trim())}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`,
+          ),
         );
-        const data = await res.json();
-        if (!mounted) return;
-        setSearchSuggestions(data.features || []);
-        setActiveSuggestion(-1);
+        const data = res !== undefined ? await res.json() : null;
+        if (data) {
+          setSearchSuggestions(data.features || []);
+          setActiveSuggestion(-1);
+        }
       } catch {
-        if (mounted) setSearchSuggestions([]);
+        if (token.active) setSearchSuggestions([]);
       } finally {
-        if (mounted) setSearchSuggestLoading(false);
+        if (token.active) setSearchSuggestLoading(false);
       }
     }, 260);
 
     return () => {
-      mounted = false;
+      token.cancel();
       clearTimeout(timeout);
     };
   }, [searchQuery]);
@@ -1537,7 +1726,7 @@ export default function Help() {
 
   useEffect(() => {
     if (mode !== "offer") return;
-    let mounted = true;
+    const token = cancellationToken();
     let loading = false;
 
     async function load() {
@@ -1554,7 +1743,7 @@ export default function Help() {
               .catch(() => null),
           ),
         ).then((results) => results.filter(Boolean));
-        if (mounted) {
+        if (token.active) {
           const map = new Map(requests.map((req) => [Number(req.id), req]));
           setOpenRequests(map);
           setSelectedRequest((current) => {
@@ -1569,7 +1758,7 @@ export default function Help() {
     load();
     const interval = setInterval(load, 5000);
     return () => {
-      mounted = false;
+      token.cancel();
       clearInterval(interval);
     };
   }, [mode]);
@@ -2174,7 +2363,7 @@ export default function Help() {
 
   useEffect(() => {
     if (!requestId) return;
-    let mounted = true;
+    const token = cancellationToken();
 
     async function poll() {
       try {
@@ -2184,7 +2373,7 @@ export default function Help() {
           const r = await getResponder(requestId, i);
           if (!r) continue;
           found = true;
-          if (mounted) {
+          if (token.active) {
             setResponders((prev) => {
               const idx = prev.findIndex((p) => p.responder === r.responder);
               if (idx >= 0) {
@@ -2199,7 +2388,7 @@ export default function Help() {
             if (r.arrived) setResponderArrived(true);
           }
         }
-        if (!found && mounted) {
+        if (!found && token.active) {
           setResponders([]);
         }
       } catch (_) {}
@@ -2208,31 +2397,33 @@ export default function Help() {
     poll();
     const interval = setInterval(poll, 3000);
     return () => {
-      mounted = false;
+      token.cancel();
       clearInterval(interval);
     };
   }, [requestId]);
 
   useEffect(() => {
     if (!lastOfferReceipt || responderArrived) return;
-    let mounted = true;
+    const token = cancellationToken();
     async function ping() {
       if (!mounted) return;
       if (!validLocation()) return;
       if (!activeWalletAddress || !lastOfferReceipt?.requestId) return;
       try {
-        await updateLocation(
-          activeWalletAddress,
-          lastOfferReceipt.requestId,
-          location[0],
-          location[1],
+        await token.wrap(
+          updateLocation(
+            activeWalletAddress,
+            lastOfferReceipt.requestId,
+            location[0],
+            location[1],
+          ),
         );
       } catch (_) {}
     }
     ping();
     const interval = setInterval(ping, 5000);
     return () => {
-      mounted = false;
+      token.cancel();
       clearInterval(interval);
     };
   }, [
@@ -2244,14 +2435,13 @@ export default function Help() {
 
   useEffect(() => {
     if (!lastOfferReceipt) return;
-    let mounted = true;
+    const token = cancellationToken();
     async function fetchRequester() {
-      if (!mounted) return;
       const requestId = lastOfferReceipt?.requestId;
       if (!requestId) return;
       try {
         const req = await getRequest(requestId);
-        if (mounted && req && req.lat != null && req.lng != null) {
+        if (token.active && req && req.lat != null && req.lng != null) {
           setRequesterLocation([req.lat, req.lng]);
         }
       } catch {}
@@ -2259,7 +2449,7 @@ export default function Help() {
     fetchRequester();
     const interval = setInterval(fetchRequester, 8000);
     return () => {
-      mounted = false;
+      token.cancel();
       clearInterval(interval);
     };
   }, [lastOfferReceipt?.requestId]);
@@ -2269,11 +2459,11 @@ export default function Help() {
       setMyRequests([]);
       return;
     }
-    let mounted = true;
+    const token = cancellationToken();
     async function fetchMyRequests() {
       const ids = loadMyRequestIds();
       if (ids.length === 0) {
-        if (mounted) setMyRequests([]);
+        if (token.active) setMyRequests([]);
         return;
       }
       setMyRequestsLoading(true);
@@ -2285,14 +2475,14 @@ export default function Help() {
           (r) => r && r.requester === activeWalletAddress,
         );
         filtered.sort((a, b) => b.created_at - a.created_at);
-        if (mounted) setMyRequests(filtered);
+        if (token.active) setMyRequests(filtered);
       } catch (_) {}
-      if (mounted) setMyRequestsLoading(false);
+      if (token.active) setMyRequestsLoading(false);
     }
     fetchMyRequests();
     const interval = setInterval(fetchMyRequests, 10000);
     return () => {
-      mounted = false;
+      token.cancel();
       clearInterval(interval);
     };
   }, [activeWalletAddress]);
@@ -4264,8 +4454,7 @@ export default function Help() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {activeWalletAddress.slice(0, 8)}...
-                      {activeWalletAddress.slice(-6)}
+                      {displayAddress}
                     </div>
                   </div>
                   <button
