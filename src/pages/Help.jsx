@@ -755,7 +755,12 @@ function TrackingScreen({
   onResolve,
 }) {
   const dist =
-    requesterLat != null && responderLat != null
+    requesterLat != null &&
+    responderLat != null &&
+    Number.isFinite(requesterLat) &&
+    Number.isFinite(requesterLng) &&
+    Number.isFinite(responderLat) &&
+    Number.isFinite(responderLng)
       ? Math.round(
           distance([requesterLat, requesterLng], [responderLat, responderLng]) *
             10,
@@ -1601,7 +1606,10 @@ export default function Help() {
   const zkError = zkState.error;
 
   const [walletAddress, setWalletAddress] = useState("");
-  const activeWalletAddress = walletAddress;
+  const activeWalletAddress =
+    typeof walletAddress === "string" && walletAddress.trim().length > 0
+      ? walletAddress.trim()
+      : "";
   const { isWalletConnected, displayAddress } = useMemo(
     () => computeWalletStatus(walletAddress),
     [walletAddress],
@@ -2511,6 +2519,11 @@ export default function Help() {
     setResponders([]);
   }, [mode, requestId]);
 
+  const openRequestsArray = useMemo(
+    () => openRequestsArray,
+    [openRequests],
+  );
+
   const step1Done = !!location;
   const step2Done = !!emergencyType;
   const step3Done = computeStep3Done(profile);
@@ -3292,7 +3305,7 @@ export default function Help() {
                             color: "#fff",
                           }}
                         >
-                          {ET_ICONS[et.id]}
+                          {ET_ICONS[et.id] || "•"}
                         </div>
                         <span
                           style={{
@@ -3723,7 +3736,7 @@ export default function Help() {
                       No one nearby needs help right now. Check back soon.
                     </p>
                   ) : (
-                    Array.from(openRequests.values()).map((req) => (
+                    openRequestsArray.map((req) => (
                       <button
                         key={req.id}
                         onClick={() => setSelectedRequest(req)}
@@ -4119,7 +4132,7 @@ export default function Help() {
             ))}
 
           {!isGetMode &&
-            Array.from(openRequests.values()).map((req) => (
+            openRequestsArray.map((req) => (
               <CharMarker
                 key={req.id}
                 charName={pickChar("default", req.id)}
@@ -4982,7 +4995,7 @@ export default function Help() {
                         transition: "background 0.15s",
                       }}
                     >
-                      {ET_ICONS[et.id]}
+                      {ET_ICONS[et.id] || "•"}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
