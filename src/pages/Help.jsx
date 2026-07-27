@@ -548,7 +548,7 @@ function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
     },
   ];
 
-  const current = steps[step];
+  const current = steps[Math.min(step, steps.length - 1)];
 
   async function handleLastAction() {
     if (step === totalSteps - 1) {
@@ -761,7 +761,10 @@ function TrackingScreen({
             10,
         ) / 10
       : null;
-  const etaMin = etaSeconds ? Math.round(etaSeconds / 60) : null;
+  const etaMin =
+    etaSeconds != null && Number.isFinite(etaSeconds) && etaSeconds > 0
+      ? Math.round(etaSeconds / 60)
+      : null;
 
   return (
     <>
@@ -1028,6 +1031,12 @@ function TrackingScreen({
       </div>
     </>
   );
+}
+
+function logEmergencySelection(typeId) {
+  try {
+    console.info(`[HelPhone] Emergency type selected: ${typeId}`);
+  } catch {}
 }
 
 const EMERGENCY_TYPES = [
@@ -1541,6 +1550,14 @@ export default function Help() {
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const searchBoxRef = useRef(null);
   const searchAbortRef = useRef(null);
+
+  // Clean up searchBoxRef on unmount to prevent memory leaks (#253)
+  useEffect(() => {
+    return () => {
+      searchBoxRef.current = null;
+      searchAbortRef.current?.abort();
+    };
+  }, []);
 
   const [requestId, setRequestId] = useState(null);
   const [requestStatus, setRequestStatus] = useState("idle");
@@ -4929,6 +4946,7 @@ export default function Help() {
                     key={et.id}
                     onClick={() => {
                       setEmergencyType(et.id);
+                      logEmergencySelection(et.id);
                       setSubmitError("");
                       setShowEmergencyModal(false);
                     }}
