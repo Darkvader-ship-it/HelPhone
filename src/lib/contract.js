@@ -181,8 +181,10 @@ async function resolveWalletAddress(wallet, fallback = '') {
 // ── Reads (no wallet needed) ───────────────────────────────────
 
 export async function getRequest(requestId) {
+  const id = safeToNumber(requestId)
+  if (!Number.isFinite(id) || id < 0) return null
   const sim = await simulateRead(
-    contract.call('get_request', scv(Number(requestId), { type: 'u64' }))
+    contract.call('get_request', scv(id, { type: 'u64' }))
   )
   if (!sim.result) return null
   const raw = scValToNative(sim.result.retval)
