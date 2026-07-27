@@ -1134,6 +1134,8 @@ const ET_ICONS = {
 
 /** Maximum number of log lines kept in the ring-buffer. */
 export const LOG_RING_SIZE = 6;
+/** Maximum character length of a single log message before truncation. */
+export const LOG_MAX_MSG_LENGTH = 200;
 
 /** Immutable initial state — also used as the reset target. */
 export const ZK_INITIAL = Object.freeze({
@@ -1190,7 +1192,12 @@ export function zkReducer(state, action) {
       return { ...state, proof: { ...state.proof, ...action.payload } };
 
     case "PUSH_LOG": {
-      const msg = action.payload;
+      const raw = String(action.payload ?? "");
+      // Truncate oversized messages to bound per-entry memory usage (#308)
+      const msg =
+        raw.length > LOG_MAX_MSG_LENGTH
+          ? raw.slice(0, LOG_MAX_MSG_LENGTH) + "…"
+          : raw;
       const prev = state.logs;
       // Consecutive-duplicate guard — identical adjacent messages are dropped
       if (prev.length > 0 && prev[prev.length - 1] === msg) return state;
@@ -2072,7 +2079,9 @@ export default function Help() {
     if (!lastOfferReceipt || responderArrived) return;
     let mounted = true;
     async function ping() {
+      if (!mounted) return;
       if (!validLocation()) return;
+      if (!activeWalletAddress || !lastOfferReceipt?.requestId) return;
       try {
         await updateLocation(
           activeWalletAddress,
@@ -2099,8 +2108,11 @@ export default function Help() {
     if (!lastOfferReceipt) return;
     let mounted = true;
     async function fetchRequester() {
+      if (!mounted) return;
+      const requestId = lastOfferReceipt?.requestId;
+      if (!requestId) return;
       try {
-        const req = await getRequest(lastOfferReceipt.requestId);
+        const req = await getRequest(requestId);
         if (mounted && req && req.lat != null && req.lng != null) {
           setRequesterLocation([req.lat, req.lng]);
         }
