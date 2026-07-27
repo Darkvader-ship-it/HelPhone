@@ -1275,6 +1275,65 @@ export function sanitizeWalletAddress(raw) {
   return addr;
 }
 
+export function computeStep3Done(profile) {
+  if (!profile) return true;
+  return Boolean(profile.nickname || profile.contact || true);
+}
+
+export function computeUserCharacter(selectedChar, profile) {
+  if (selectedChar) return selectedChar;
+  const nickname = profile?.nickname || "me";
+  return pickChar("default", nickname);
+}
+
+export const STATUS_CONFIG = {
+  Pending: {
+    label: "WAITING FOR RESPONDER",
+    color: "#a2a586",
+    bg: "rgba(162,165,134,0.12)",
+    msg: "Your pin is live. Waiting for someone nearby.",
+  },
+  Enroute: {
+    label: "RESPONDER ON THE WAY",
+    color: "#7357FF",
+    bg: "rgba(115,87,255,0.12)",
+    msg: "Stay where you are. Help is coming.",
+  },
+  Resolved: {
+    label: "RESOLVED",
+    color: "#3F8487",
+    bg: "rgba(63,132,135,0.12)",
+    msg: "This request has been resolved.",
+  },
+  Cancelled: {
+    label: "CANCELLED",
+    color: "#a2a586",
+    bg: "rgba(162,165,134,0.12)",
+    msg: "Request cancelled.",
+  },
+};
+
+export const DEFAULT_STATUS_INFO = {
+  label: "UNKNOWN STATUS",
+  color: "#a2a586",
+  bg: "rgba(162,165,134,0.12)",
+  msg: "Status is currently unavailable.",
+};
+
+export function getStatusConfig(requestStatus) {
+  if (typeof requestStatus !== "string") return DEFAULT_STATUS_INFO;
+  return STATUS_CONFIG[requestStatus] || DEFAULT_STATUS_INFO;
+}
+
+export function checkIsGetMode(mode) {
+  if (typeof mode !== "string") return false;
+  return mode.trim().toLowerCase() === "get";
+}
+
+export function getAccentColor(isGetMode) {
+  return isGetMode ? "#FF7A6B" : "#7357FF";
+}
+
 export default function Help() {
   const [mode, setMode] = useState("get");
 
@@ -2247,7 +2306,7 @@ export default function Help() {
 
   const step1Done = !!location;
   const step2Done = !!emergencyType;
-  const step3Done = true;
+  const step3Done = computeStep3Done(profile);
   const currentStep = !step1Done
     ? 1
     : requestStatus === "idle"
@@ -2256,38 +2315,13 @@ export default function Help() {
         : 4
       : 5;
 
-  const myChar = selectedChar || pickChar("default", profile.nickname || "me");
+  const myChar = computeUserCharacter(selectedChar, profile);
 
-  const statusConfig = {
-    Pending: {
-      label: "WAITING FOR RESPONDER",
-      color: "#a2a586",
-      bg: "rgba(162,165,134,0.12)",
-      msg: "Your pin is live. Waiting for someone nearby.",
-    },
-    Enroute: {
-      label: "RESPONDER ON THE WAY",
-      color: "#7357FF",
-      bg: "rgba(115,87,255,0.12)",
-      msg: "Stay where you are. Help is coming.",
-    },
-    Resolved: {
-      label: "RESOLVED",
-      color: "#3F8487",
-      bg: "rgba(63,132,135,0.12)",
-      msg: "This request has been resolved.",
-    },
-    Cancelled: {
-      label: "CANCELLED",
-      color: "#a2a586",
-      bg: "rgba(162,165,134,0.12)",
-      msg: "Request cancelled.",
-    },
-  };
-  const statusInfo = statusConfig[requestStatus];
+  const statusConfig = STATUS_CONFIG;
+  const statusInfo = getStatusConfig(requestStatus);
 
-  const isGetMode = mode === "get";
-  const accentColor = isGetMode ? "#FF7A6B" : "#7357FF";
+  const isGetMode = checkIsGetMode(mode);
+  const accentColor = getAccentColor(isGetMode);
 
   const showTracking =
     (requestStatus === "Enroute" && responders.length > 0) ||
