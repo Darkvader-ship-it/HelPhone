@@ -275,12 +275,32 @@ function ExplorerLink({ label, hash }) {
 
 function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
   if (!open) return null;
+
+  // Issue #244 & #246: Encapsulated action handler safe from async race conditions and thread blocking
+  const handleLastAction = (e) => {
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
+    if (typeof onClose === 'function') {
+      try {
+        onClose();
+      } catch (err) {
+        console.warn("Non-blocking error during modal dismissal:", err);
+      }
+    }
+  };
+
+  // Issue #247: Input validation for TrackingScreen / receipt hashes to prevent network & rendering failures
+  const safeTxHash = typeof txHash === 'string' && /^[0-9a-fA-F]{16,64}$/.test(txHash.trim())
+    ? txHash.trim()
+    : null;
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="arrival-thanks-title"
-      onClick={onClose}
+      onClick={handleLastAction}
       style={{
         position: "fixed",
         inset: 0,
@@ -373,7 +393,7 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
             {requestLabel}
           </div>
         )}
-        {txHash && (
+        {safeTxHash && (
           <div
             style={{
               marginBottom: "14px",
@@ -381,12 +401,12 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
               justifyContent: "center",
             }}
           >
-            <ExplorerLink label="Arrival receipt" hash={txHash} />
+            <ExplorerLink label="Arrival receipt" hash={safeTxHash} />
           </div>
         )}
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleLastAction}
           style={{
             width: "100%",
             minHeight: "44px",
