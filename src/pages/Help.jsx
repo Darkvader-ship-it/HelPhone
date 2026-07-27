@@ -1657,8 +1657,10 @@ export default function Help() {
 
     async function syncWallet() {
       try {
-        const { address: raw } = await token.wrap(StellarWalletsKit.getAddress());
-        if (raw !== undefined) debouncedSet(sanitizeWalletAddress(raw));
+        const result = await token.wrap(StellarWalletsKit.getAddress());
+        if (result === undefined || result === null) return;
+        if (typeof result.address !== "string") return;
+        debouncedSet(sanitizeWalletAddress(result.address));
       } catch {
         if (token.active) debouncedSet("");
       }
@@ -1670,7 +1672,11 @@ export default function Help() {
       debouncedSet(sanitizeWalletAddress(event?.payload?.address));
     });
     offDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
-      if (token.active) debouncedSet("");
+      try {
+        if (token.active) debouncedSet("");
+      } catch {
+        // wallet update after disconnect — non-critical, ignore
+      }
       setProfileOpen(false);
     });
 
@@ -1696,23 +1702,30 @@ export default function Help() {
   useEffect(() => {
     if (!styleOpen) return;
     function onDocClick(e) {
+      const target = e.target instanceof Node ? e.target : null;
       if (
+        target &&
         styleSelectorRef.current &&
-        !styleSelectorRef.current.contains(e.target)
+        !styleSelectorRef.current.contains(target)
       )
         setStyleOpen(false);
     }
-    document.addEventListener("click", onDocClick);
+    document.addEventListener("click", onDocClick, { passive: true });
     return () => document.removeEventListener("click", onDocClick);
   }, [styleOpen]);
 
   useEffect(() => {
     if (!profileOpen) return;
     function onDocClick(e) {
-      if (profileRef.current && !profileRef.current.contains(e.target))
+      const target = e.target instanceof Node ? e.target : null;
+      if (
+        target &&
+        profileRef.current &&
+        !profileRef.current.contains(target)
+      )
         setProfileOpen(false);
     }
-    document.addEventListener("click", onDocClick);
+    document.addEventListener("click", onDocClick, { passive: true });
     return () => document.removeEventListener("click", onDocClick);
   }, [profileOpen]);
 
