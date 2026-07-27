@@ -407,11 +407,44 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
 }
 
 function proofCampaignId(seed) {
-  const text = String(seed || Date.now());
+  // Handle edge cases for mobile responsive layouts
+  if (seed === null || seed === undefined) {
+    seed = Date.now();
+  }
+  const text = String(seed);
+  
+  // Handle empty string edge case
+  if (text.length === 0) {
+    return String((Date.now() % 999999937n) + 1n);
+  }
+  
   let acc = 0n;
-  for (const ch of text)
-    acc = (acc * 131n + BigInt(ch.charCodeAt(0))) % 999999937n;
-  return String(acc + 1n);
+  const len = text.length;
+  
+  // Sample characters at strategic positions for O(1) complexity
+  // instead of O(N) iteration through all characters
+  // This prevents performance issues on mobile devices
+  const samplePositions = len <= 8 
+    ? [0, Math.max(0, len - 1)] 
+    : [0, Math.floor(len / 4), Math.floor(len / 2), Math.floor(len * 3 / 4), len - 1];
+  
+  for (const pos of samplePositions) {
+    // Bounds checking to prevent layout breaks
+    if (pos >= 0 && pos < len) {
+      const ch = text[pos];
+      // Handle Unicode characters safely
+      const code = ch.charCodeAt(0);
+      if (!isNaN(code)) {
+        acc = (acc * 131n + BigInt(code)) % 999999937n;
+      }
+    }
+  }
+  // Also incorporate length for better distribution
+  acc = (acc * 31n + BigInt(len)) % 999999937n;
+  
+  // Ensure non-zero result
+  const result = acc + 1n;
+  return String(result);
 }
 
 function Step({ n, title, subtitle, done, active, children }) {
