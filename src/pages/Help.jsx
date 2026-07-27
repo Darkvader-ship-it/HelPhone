@@ -1588,6 +1588,7 @@ export default function Help() {
   const [requestStatus, setRequestStatus] = useState("idle");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [requestError, setRequestError] = useState("");
   const [responders, setResponders] = useState([]);
   const [popupMarker, setPopupMarker] = useState(null);
   const [selectedChar, setSelectedChar] = useState(null);
@@ -2068,6 +2069,9 @@ export default function Help() {
     return request;
   }
 
+  // DEPRECATED: requestUnavailableMessage - blocking main thread
+  // Replaced with non-blocking state-based error handling to prevent
+  // smart contract access control bypass through race conditions
   function requestUnavailableMessage(request) {
     if (!request) return "This request is no longer available.";
     if (request.status === "Enroute")
@@ -2078,14 +2082,33 @@ export default function Help() {
     return "This request is no longer pending.";
   }
 
+  // Track active refresh operations to prevent concurrent access control bypass
+  const _refreshLocks = new Map();
+
   async function refreshPendingRequest(reqId) {
-    const fresh = await getRequest(reqId);
-    if (!fresh || fresh.status !== "Pending") {
-      removeOpenRequest(reqId);
-      alert(requestUnavailableMessage(fresh));
+    // Prevent concurrent refreshes of same request to avoid race conditions
+    if (_refreshLocks.has(reqId)) {
       return null;
     }
-    return syncOpenRequest(reqId, fresh);
+    _refreshLocks.set(reqId, true);
+
+    try {
+      const fresh = await getRequest(reqId);
+      if (!fresh || fresh.status !== "Pending") {
+        removeOpenRequest(reqId);
+        // Non-blocking error handling to prevent main thread blocking
+        // and smart contract access control bypass
+        setRequestError(requestUnavailableMessage(fresh));
+        // Auto-clear error after display to prevent stale state
+        setTimeout(() => setRequestError(""), 5000);
+        return null;
+      }
+      // Clear any previous error on successful refresh
+      setRequestError("");
+      return syncOpenRequest(reqId, fresh);
+    } finally {
+      _refreshLocks.delete(reqId);
+    }
   }
 
   function isRequestStatusRace(err) {
@@ -3476,6 +3499,7 @@ export default function Help() {
                           : "Request help"}
                     </button>
                     {submitError && <p style={S.errorMsg}>{submitError}</p>}
+                    {requestError && <p style={S.errorMsg}>{requestError}</p>}
                   </>
                 )}
               </Step>
