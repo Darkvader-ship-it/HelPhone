@@ -63,15 +63,16 @@ const MAP_STYLES = [
   },
 ];
 
-const CHARS = {
-  male: ["runner", "pacheco", "growth", "jumping-air"],
-  female: ["chilly", "meela-pantalones", "feliz", "pondering"],
-  undisclosed: ["cube-leg", "roboto", "mechanical-love"],
-  default: ["looking-ahead", "waiting", "bueno"],
-};
+const CHARS = Object.freeze({
+  male: Object.freeze(["runner", "pacheco", "growth", "jumping-air"]),
+  female: Object.freeze(["chilly", "meela-pantalones", "feliz", "pondering"]),
+  undisclosed: Object.freeze(["cube-leg", "roboto", "mechanical-love"]),
+  default: Object.freeze(["looking-ahead", "waiting", "bueno"]),
+});
 
 function pickChar(gender, seed = "") {
   const pool = CHARS[gender] || CHARS.default;
+  if (!pool.length) return CHARS.default[0];
   const s = String(seed);
   const idx =
     s.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % pool.length;
@@ -98,6 +99,12 @@ function CharMarker({
       >
         <img
           src={`/assets/chars/${charName}.png`}
+          alt=""
+          onError={(e) => {
+            if (e.currentTarget.src.endsWith(`${CHARS.default[0]}.png`))
+              return;
+            e.currentTarget.src = `/assets/chars/${CHARS.default[0]}.png`;
+          }}
           style={{
             width: 52,
             height: 52,
@@ -127,8 +134,9 @@ function CharMarker({
 function MapController({ center, zoom = 14 }) {
   const { current: map } = useMap();
   useEffect(() => {
-    if (center && map)
-      map.flyTo({ center: [center[1], center[0]], zoom, duration: 1200 });
+    if (!map || !Number.isFinite(center?.[0]) || !Number.isFinite(center?.[1]))
+      return;
+    map.flyTo({ center: [center[1], center[0]], zoom, duration: 1200 });
   }, [center, zoom, map]);
   return null;
 }
