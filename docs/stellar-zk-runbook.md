@@ -56,6 +56,11 @@ RUSTC=/Users/paukoh/.cargo/bin/rustc /Users/paukoh/.cargo/bin/cargo build --targ
 
 ## Aegis Funding Flow
 
+Deploy `aegis_vault` with the verifier contract, reward token, and payout admin
+address. The constructor initializes the responder payout to 50 USDC in token
+base units. The admin can later call `set_payout_amount(admin, amount)` to adjust
+the payout for emergency severity, token price changes, or governance decisions.
+
 `aegis_vault.fund_zone` now requires the 160-byte campaign prefix:
 
 ```text
