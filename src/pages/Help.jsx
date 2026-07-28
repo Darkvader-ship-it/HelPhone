@@ -256,24 +256,39 @@ export function anonymizeLocation(location) {
   ];
 }
 
-function privateRequestLabel(id) {
-  return `Private request #${id || "pending"}`;
+export function privateRequestLabel(id) {
+  // Guard against non-string/non-number ids (e.g. an object slipping through
+  // from a malformed contract read) rendering as "[object Object]" — fall
+  // back to "pending" for anything that isn't a usable primitive.
+  const safeId =
+    typeof id === "string" || typeof id === "number" ? id : "pending";
+  return `Private request #${safeId || "pending"}`;
 }
 
-function txExplorerUrl(hash) {
-  if (!hash) return null;
-  return `https://stellar.expert/explorer/testnet/tx/${hash}`;
+// Matches the hex-hash tolerance already established for receipt hashes
+// elsewhere in this file (see the `safeTxHash` validation, issue #247) —
+// reject anything that isn't a plausible hex tx hash so a malformed/garbage
+// value never produces a broken or unexpectedly-shaped explorer URL.
+const TX_HASH_PATTERN = /^[0-9a-f]{16,64}$/i;
+
+export function txExplorerUrl(hash) {
+  if (typeof hash !== "string") return null;
+  const trimmed = hash.trim();
+  if (!TX_HASH_PATTERN.test(trimmed)) return null;
+  return `https://stellar.expert/explorer/testnet/tx/${trimmed}`;
 }
 
-function ExplorerLink({ label, hash }) {
+export function ExplorerLink({ label, hash }) {
   const url = txExplorerUrl(hash);
   if (!url) return null;
+  const safeLabel = typeof label === "string" && label ? label : "transaction";
   return (
     <a
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      title={`View ${label.toLowerCase()} on Stellar Expert (testnet)`}
+      aria-label={`View ${safeLabel} on Stellar Expert (testnet), opens in a new tab`}
+      title={`View ${safeLabel.toLowerCase()} on Stellar Expert (testnet)`}
       style={{
         display: "flex",
         alignItems: "center",
@@ -294,7 +309,7 @@ function ExplorerLink({ label, hash }) {
         e.currentTarget.style.textDecoration = "none";
       }}
     >
-      <span style={{ color: "rgba(242,236,220,0.4)" }}>{label}</span>
+      <span style={{ color: "rgba(242,236,220,0.4)" }}>{safeLabel}</span>
       <span>{shortProofId(hash)}</span>
       <svg
         width="11"
@@ -580,30 +595,37 @@ function Step({ n, title, subtitle, done, active, children }) {
   );
 }
 
-export const HELP_ONBOARDING_STEPS = [
-  {
-    label: "Request",
-    title: "Help when you need it",
-    body: "HelPhone connects you with people nearby when you're in an emergency. You can request help or offer help to others. Everything runs on Stellar — fast, public, and verifiable.",
-  },
-  {
-    label: "Receipt",
-    title: "Your action goes on-chain first",
-    body: "When you request or offer help, Stellar confirms it in seconds. That creates a public transaction hash — your receipt.",
-  },
-  {
-    label: "Wallet",
-    title: "Connect your preferred wallet",
-    body: "Your Stellar wallet only signs transactions — it's not a tracking tool. Connect to request help, offer help, or verify your identity on the network.",
-    isLast: true,
-  },
-];
-
-function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
+export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
   const [step, setStep] = useState(0);
+  const dialogRef = useRef(null);
+  const lastFocusedRef = useRef(null);
+
   useEffect(() => {
     if (open) setStep(0);
   }, [open]);
+
+  // Dialog a11y: close on Escape, focus the dialog on open, and return
+  // focus to whatever triggered it on close — matches the role="dialog"
+  // pattern already used elsewhere in this file (see the arrival-receipt
+  // modal's aria-labelledby/aria-modal usage).
+  useEffect(() => {
+    if (!open) return undefined;
+    lastFocusedRef.current = document.activeElement;
+    dialogRef.current?.focus();
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (lastFocusedRef.current instanceof HTMLElement) {
+        lastFocusedRef.current.focus();
+      }
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -633,8 +655,16 @@ function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
         justifyContent: "center",
         padding: "18px",
       }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-onboarding-title"
+        tabIndex={-1}
         style={{
           width: "100%",
           maxWidth: "460px",
@@ -644,6 +674,7 @@ function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
           boxShadow: "0 24px 80px rgba(0,0,0,0.62)",
           overflow: "hidden",
           transition: "opacity 0.25s",
+          outline: "none",
         }}
       >
         <div
@@ -734,6 +765,7 @@ function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
             {step + 1}/{totalSteps} · {current.label}
           </div>
           <h2
+            id="help-onboarding-title"
             style={{
               margin: "0 0 10px",
               color: "#F4ECDC",
