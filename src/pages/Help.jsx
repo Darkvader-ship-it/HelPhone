@@ -133,7 +133,17 @@ function MapController({ center, zoom = 14 }) {
   return null;
 }
 
-function distance(a, b) {
+export function distance(a, b) {
+  // Issue #226: guard against non-finite coords so a bad reading can't
+  // silently turn into NaN and get rendered as a distance.
+  if (
+    !Number.isFinite(a?.[0]) ||
+    !Number.isFinite(a?.[1]) ||
+    !Number.isFinite(b?.[0]) ||
+    !Number.isFinite(b?.[1])
+  ) {
+    return null;
+  }
   const R = 6371;
   const dLat = ((b[0] - a[0]) * Math.PI) / 180;
   const dLng = ((b[1] - a[1]) * Math.PI) / 180;
@@ -148,23 +158,29 @@ function distance(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+// Issue #227: pure builder extracted so RouteLine can memoize on it instead
+// of allocating a fresh GeoJSON object identity on every render.
+export function buildRouteFeature(from, to) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [from[1], from[0]],
+        [to[1], to[0]],
+      ],
+    },
+  };
+}
+
 function RouteLine({ id: routeId, from, to, color = "#7357FF" }) {
   const id = `route-${routeId || `${from[0]}-${from[1]}-${to[0]}-${to[1]}`}`;
+  const data = useMemo(
+    () => buildRouteFeature(from, to),
+    [from[0], from[1], to[0], to[1]],
+  );
   return (
-    <Source
-      id={id}
-      type="geojson"
-      data={{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [from[1], from[0]],
-            [to[1], to[0]],
-          ],
-        },
-      }}
-    >
+    <Source id={id} type="geojson" data={data}>
       <Layer
         id={`${id}-line`}
         type="line"
@@ -179,15 +195,22 @@ function RouteLine({ id: routeId, from, to, color = "#7357FF" }) {
   );
 }
 
-function loadProfile() {
+export function loadProfile() {
   try {
-    return JSON.parse(localStorage.getItem("hp_profile") || "{}");
+    const parsed = JSON.parse(localStorage.getItem("hp_profile") || "{}");
+    // Issue #228: localStorage can hold valid-but-unexpected JSON (e.g. "null"
+    // or an array) — guard so callers always get a plain object back.
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
   } catch {
     return {};
   }
 }
 
-const DEFAULT_CENTER = [20, 0];
+// Issue #229: frozen so this shared fallback map center can't be mutated
+// in place by a stray `.push`/index assignment elsewhere in the file.
+export const DEFAULT_CENTER = Object.freeze([20, 0]);
 
 const MY_REQUESTS_KEY = "hp_my_requests";
 
@@ -3073,19 +3096,24 @@ export default function Help() {
                             min
                           </>
                         )}
-                        {location && responders[0] && (
-                          <>
-                            {" "}
-                            ·{" "}
-                            {Math.round(
-                              distance(location, [
-                                responders[0].lat,
-                                responders[0].lng,
-                              ]) * 10,
-                            ) / 10}{" "}
-                            km away
-                          </>
-                        )}
+                        {location &&
+                          responders[0] &&
+                          distance(location, [
+                            responders[0].lat,
+                            responders[0].lng,
+                          ]) != null && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              {Math.round(
+                                distance(location, [
+                                  responders[0].lat,
+                                  responders[0].lng,
+                                ]) * 10,
+                              ) / 10}{" "}
+                              km away
+                            </>
+                          )}
                       </div>
                     </div>
                   )}
