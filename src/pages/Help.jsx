@@ -191,24 +191,42 @@ const DEFAULT_CENTER = [20, 0];
 
 const MY_REQUESTS_KEY = "hp_my_requests";
 
-function loadMyRequestIds() {
+// Some browsers (Safari private mode, storage disabled, strict privacy
+// settings) throw on localStorage access instead of just returning null,
+// and a stored value can be corrupted or hand-edited into a non-array.
+// Both paths must degrade to an empty list rather than crash the caller.
+export function loadMyRequestIds() {
   try {
-    return JSON.parse(localStorage.getItem(MY_REQUESTS_KEY) || "[]");
+    const parsed = JSON.parse(localStorage.getItem(MY_REQUESTS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id) => Number.isFinite(id));
   } catch {
     return [];
   }
 }
 
-function saveMyRequestId(id) {
+export function saveMyRequestId(id) {
+  if (!Number.isFinite(id)) return;
   const ids = loadMyRequestIds();
   if (!ids.includes(id)) {
     ids.unshift(id);
-    localStorage.setItem(MY_REQUESTS_KEY, JSON.stringify(ids.slice(0, 20)));
+    try {
+      localStorage.setItem(MY_REQUESTS_KEY, JSON.stringify(ids.slice(0, 20)));
+    } catch {
+      // Storage quota exceeded or unavailable — the request itself was
+      // already created on-chain, so this must not fail the caller.
+    }
   }
 }
 
-function anonymizeLocation(location) {
-  if (!location) return location;
+export function anonymizeLocation(location) {
+  if (
+    !Array.isArray(location) ||
+    !Number.isFinite(location[0]) ||
+    !Number.isFinite(location[1])
+  ) {
+    throw new Error("Unable to read your location. Try again.");
+  }
   return [
     Math.round(location[0] * 100) / 100,
     Math.round(location[1] * 100) / 100,
