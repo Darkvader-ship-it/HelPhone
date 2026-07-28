@@ -18,7 +18,15 @@ export default function Ranking() {
       try {
         const entries = await getRanking()
         if (ignore) return
-        const sorted = entries
+        const valid = Array.isArray(entries)
+          ? entries.filter(
+              (e) =>
+                e &&
+                typeof e.responder === 'string' &&
+                Number.isFinite(e.total_arrivals),
+            )
+          : []
+        const sorted = valid
           .sort((a, b) => b.total_arrivals - a.total_arrivals)
           .slice(0, 20)
         setRows(sorted)
