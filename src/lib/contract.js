@@ -1,10 +1,27 @@
 import {
   rpc, Contract, TransactionBuilder, Operation, Transaction, Account, Keypair,
-  nativeToScVal, scValToNative, Networks, BASE_FEE,
+  nativeToScVal, scValToNative, Networks, BASE_FEE, StrKey,
 } from '@stellar/stellar-sdk'
 
-const DEFAULT_CONTRACT_ID = 'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY'
-const CONTRACT_ID = import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID
+/** Validate a Stellar Soroban contract ID (strkey 'C...' with CRC16 checksum).
+ *  Throws immediately with a clear message instead of letting a malformed ID
+ *  silently propagate into RPC calls, where it would surface later as an
+ *  opaque simulation/network failure. */
+export function assertValidContractId(id, label) {
+  if (typeof id !== 'string' || !StrKey.isValidContract(id)) {
+    throw new Error(`${label} is not a valid Stellar contract ID: ${JSON.stringify(id)}`)
+  }
+  return id
+}
+
+const DEFAULT_CONTRACT_ID = assertValidContractId(
+  'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY',
+  'DEFAULT_CONTRACT_ID'
+)
+const CONTRACT_ID = assertValidContractId(
+  import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
+  'CONTRACT_ID'
+)
 const RPC_URL = 'https://soroban-testnet.stellar.org'
 const DEFAULT_FRIENDBOT_URL = 'https://friendbot.stellar.org'
 const FRIENDBOT_URL = import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL

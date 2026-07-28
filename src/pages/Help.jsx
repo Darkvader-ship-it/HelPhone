@@ -133,7 +133,17 @@ function MapController({ center, zoom = 14 }) {
   return null;
 }
 
-function distance(a, b) {
+export function distance(a, b) {
+  // Issue #226: guard against non-finite coords so a bad reading can't
+  // silently turn into NaN and get rendered as a distance.
+  if (
+    !Number.isFinite(a?.[0]) ||
+    !Number.isFinite(a?.[1]) ||
+    !Number.isFinite(b?.[0]) ||
+    !Number.isFinite(b?.[1])
+  ) {
+    return null;
+  }
   const R = 6371;
   const dLat = ((b[0] - a[0]) * Math.PI) / 180;
   const dLng = ((b[1] - a[1]) * Math.PI) / 180;
@@ -148,23 +158,29 @@ function distance(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+// Issue #227: pure builder extracted so RouteLine can memoize on it instead
+// of allocating a fresh GeoJSON object identity on every render.
+export function buildRouteFeature(from, to) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [from[1], from[0]],
+        [to[1], to[0]],
+      ],
+    },
+  };
+}
+
 function RouteLine({ id: routeId, from, to, color = "#7357FF" }) {
   const id = `route-${routeId || `${from[0]}-${from[1]}-${to[0]}-${to[1]}`}`;
+  const data = useMemo(
+    () => buildRouteFeature(from, to),
+    [from[0], from[1], to[0], to[1]],
+  );
   return (
-    <Source
-      id={id}
-      type="geojson"
-      data={{
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            [from[1], from[0]],
-            [to[1], to[0]],
-          ],
-        },
-      }}
-    >
+    <Source id={id} type="geojson" data={data}>
       <Layer
         id={`${id}-line`}
         type="line"
@@ -179,36 +195,61 @@ function RouteLine({ id: routeId, from, to, color = "#7357FF" }) {
   );
 }
 
-function loadProfile() {
+export function loadProfile() {
   try {
-    return JSON.parse(localStorage.getItem("hp_profile") || "{}");
+    const parsed = JSON.parse(localStorage.getItem("hp_profile") || "{}");
+    // Issue #228: localStorage can hold valid-but-unexpected JSON (e.g. "null"
+    // or an array) — guard so callers always get a plain object back.
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
   } catch {
     return {};
   }
 }
 
-const DEFAULT_CENTER = [20, 0];
+// Issue #229: frozen so this shared fallback map center can't be mutated
+// in place by a stray `.push`/index assignment elsewhere in the file.
+export const DEFAULT_CENTER = Object.freeze([20, 0]);
 
 const MY_REQUESTS_KEY = "hp_my_requests";
 
-function loadMyRequestIds() {
+// Some browsers (Safari private mode, storage disabled, strict privacy
+// settings) throw on localStorage access instead of just returning null,
+// and a stored value can be corrupted or hand-edited into a non-array.
+// Both paths must degrade to an empty list rather than crash the caller.
+export function loadMyRequestIds() {
   try {
-    return JSON.parse(localStorage.getItem(MY_REQUESTS_KEY) || "[]");
+    const parsed = JSON.parse(localStorage.getItem(MY_REQUESTS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id) => Number.isFinite(id));
   } catch {
     return [];
   }
 }
 
-function saveMyRequestId(id) {
+export function saveMyRequestId(id) {
+  if (!Number.isFinite(id)) return;
   const ids = loadMyRequestIds();
   if (!ids.includes(id)) {
     ids.unshift(id);
-    localStorage.setItem(MY_REQUESTS_KEY, JSON.stringify(ids.slice(0, 20)));
+    try {
+      localStorage.setItem(MY_REQUESTS_KEY, JSON.stringify(ids.slice(0, 20)));
+    } catch {
+      // Storage quota exceeded or unavailable — the request itself was
+      // already created on-chain, so this must not fail the caller.
+    }
   }
 }
 
-function anonymizeLocation(location) {
-  if (!location) return location;
+export function anonymizeLocation(location) {
+  if (
+    !Array.isArray(location) ||
+    !Number.isFinite(location[0]) ||
+    !Number.isFinite(location[1])
+  ) {
+    throw new Error("Unable to read your location. Try again.");
+  }
   return [
     Math.round(location[0] * 100) / 100,
     Math.round(location[1] * 100) / 100,
@@ -288,15 +329,24 @@ export function ExplorerLink({ label, hash }) {
   );
 }
 
+// Receipt-hash validation hoisted to module scope so the pattern is compiled
+// once instead of on every modal render.
+const TX_HASH_PATTERN = /^[0-9a-fA-F]{16,64}$/;
+
+function sanitizeTxHash(txHash) {
+  if (typeof txHash !== "string") return null;
+  const trimmed = txHash.trim();
+  return TX_HASH_PATTERN.test(trimmed) ? trimmed : null;
+}
+
 function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
   if (!open) return null;
 
-  // Issue #244 & #246: Encapsulated action handler safe from async race conditions and thread blocking
   const handleLastAction = (e) => {
-    if (e && typeof e.stopPropagation === 'function') {
+    if (e && typeof e.stopPropagation === "function") {
       e.stopPropagation();
     }
-    if (typeof onClose === 'function') {
+    if (typeof onClose === "function") {
       try {
         onClose();
       } catch (err) {
@@ -305,10 +355,7 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
     }
   };
 
-  // Issue #247: Input validation for TrackingScreen / receipt hashes to prevent network & rendering failures
-  const safeTxHash = typeof txHash === 'string' && /^[0-9a-fA-F]{16,64}$/.test(txHash.trim())
-    ? txHash.trim()
-    : null;
+  const safeTxHash = sanitizeTxHash(txHash);
 
   return (
     <div
@@ -442,48 +489,50 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
   );
 }
 
+// Deterministic campaign id from a seed string. Hashes every character —
+// distinct seeds must map to distinct campaigns, otherwise colliding ids
+// reuse a nullifier on-chain and the claim is rejected after fees are paid.
 function proofCampaignId(seed) {
-  // Handle edge cases for mobile responsive layouts
-  if (seed === null || seed === undefined) {
-    seed = Date.now();
-  }
-  const text = String(seed);
-  
-  // Handle empty string edge case
-  if (text.length === 0) {
-    return String((Date.now() % 999999937n) + 1n);
-  }
-  
+  const text =
+    seed === null || seed === undefined ? String(Date.now()) : String(seed);
   let acc = 0n;
-  const len = text.length;
-  
-  // Sample characters at strategic positions for O(1) complexity
-  // instead of O(N) iteration through all characters
-  // This prevents performance issues on mobile devices
-  const samplePositions = len <= 8 
-    ? [0, Math.max(0, len - 1)] 
-    : [0, Math.floor(len / 4), Math.floor(len / 2), Math.floor(len * 3 / 4), len - 1];
-  
-  for (const pos of samplePositions) {
-    // Bounds checking to prevent layout breaks
-    if (pos >= 0 && pos < len) {
-      const ch = text[pos];
-      // Handle Unicode characters safely
-      const code = ch.charCodeAt(0);
-      if (!isNaN(code)) {
-        acc = (acc * 131n + BigInt(code)) % 999999937n;
-      }
-    }
+  for (let i = 0; i < text.length; i++) {
+    acc = (acc * 131n + BigInt(text.charCodeAt(i))) % 999999937n;
   }
-  // Also incorporate length for better distribution
-  acc = (acc * 31n + BigInt(len)) % 999999937n;
-  
+  acc = (acc * 31n + BigInt(text.length)) % 999999937n;
   // Ensure non-zero result
-  const result = acc + 1n;
-  return String(result);
+  return String(acc + 1n);
 }
 
+// Step state → colors, kept in module scope so every render reads one
+// frozen source of truth instead of rebuilding nested ternaries inline.
+const STEP_STATE_COLORS = Object.freeze({
+  done: {
+    badgeBg: "#3F8487",
+    border: "#3F8487",
+    badgeText: "#fff",
+    title: "#3F8487",
+  },
+  active: {
+    badgeBg: "#FF7A6B",
+    border: "#FF7A6B",
+    badgeText: "#fff",
+    title: "rgba(242,236,220,0.95)",
+  },
+  idle: {
+    badgeBg: "rgba(255,255,255,0.1)",
+    border: "rgba(255,255,255,0.2)",
+    badgeText: "rgba(242,236,220,0.4)",
+    title: "rgba(242,236,220,0.45)",
+  },
+});
+
 function Step({ n, title, subtitle, done, active, children }) {
+  const colors = done
+    ? STEP_STATE_COLORS.done
+    : active
+      ? STEP_STATE_COLORS.active
+      : STEP_STATE_COLORS.idle;
   return (
     <div
       style={{
@@ -506,18 +555,14 @@ function Step({ n, title, subtitle, done, active, children }) {
             height: "26px",
             borderRadius: "50%",
             flexShrink: 0,
-            background: done
-              ? "#3F8487"
-              : active
-                ? "#FF7A6B"
-                : "rgba(255,255,255,0.1)",
-            border: `2px solid ${done ? "#3F8487" : active ? "#FF7A6B" : "rgba(255,255,255,0.2)"}`,
+            background: colors.badgeBg,
+            border: `2px solid ${colors.border}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: "12px",
             fontWeight: "700",
-            color: done || active ? "#fff" : "rgba(242,236,220,0.4)",
+            color: colors.badgeText,
           }}
         >
           {done ? "✓" : n}
@@ -527,11 +572,7 @@ function Step({ n, title, subtitle, done, active, children }) {
             style={{
               fontSize: "13px",
               fontWeight: "600",
-              color: done
-                ? "#3F8487"
-                : active
-                  ? "rgba(242,236,220,0.95)"
-                  : "rgba(242,236,220,0.45)",
+              color: colors.title,
             }}
           >
             {title}
@@ -588,26 +629,8 @@ export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
 
   if (!open) return null;
 
-  const totalSteps = 3;
-
-  const steps = [
-    {
-      label: "Request",
-      title: "Help when you need it",
-      body: "HelPhone connects you with people nearby when you're in an emergency. You can request help or offer help to others. Everything runs on Stellar — fast, public, and verifiable.",
-    },
-    {
-      label: "Receipt",
-      title: "Your action goes on-chain first",
-      body: "When you request or offer help, Stellar confirms it in seconds. That creates a public transaction hash — your receipt.",
-    },
-    {
-      label: "Wallet",
-      title: "Connect your preferred wallet",
-      body: "Your Stellar wallet only signs transactions — it's not a tracking tool. Connect to request help, offer help, or verify your identity on the network.",
-      isLast: true,
-    },
-  ];
+  const steps = HELP_ONBOARDING_STEPS;
+  const totalSteps = steps.length;
 
   const current = steps[Math.min(step, steps.length - 1)];
 
@@ -1603,6 +1626,20 @@ export function safeToggleClass(
   return false;
 }
 
+function useOutsideClick(active, ref, onOutside) {
+  useEffect(() => {
+    if (!active) return;
+    function onDocClick(e) {
+      const target = e.target instanceof Node ? e.target : null;
+      if (target && ref.current && !ref.current.contains(target)) {
+        onOutside();
+      }
+    }
+    document.addEventListener("click", onDocClick, { passive: true });
+    return () => document.removeEventListener("click", onDocClick);
+  }, [active, ref, onOutside]);
+}
+
 export default function Help() {
   const [mode, setMode] = useState("get");
 
@@ -1626,6 +1663,11 @@ export default function Help() {
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const searchBoxRef = useRef(null);
   const searchAbortRef = useRef(null);
+  // Lets the outside-click handler cancel the in-flight autocomplete fetch.
+  // Without this, a slow/timed-out request that resolves after the user
+  // dismisses the dropdown would silently repopulate suggestions they
+  // already closed.
+  const searchSuggestTokenRef = useRef(null);
 
   // Clean up searchBoxRef on unmount to prevent memory leaks (#253)
   useEffect(() => {
@@ -1751,35 +1793,17 @@ export default function Help() {
     safeToggleClass(sidebarRef.current, showMobileForm);
   }, [showMobileForm]);
 
-  useEffect(() => {
-    if (!styleOpen) return;
-    function onDocClick(e) {
-      const target = e.target instanceof Node ? e.target : null;
-      if (
-        target &&
-        styleSelectorRef.current &&
-        !styleSelectorRef.current.contains(target)
-      )
-        setStyleOpen(false);
-    }
-    document.addEventListener("click", onDocClick, { passive: true });
-    return () => document.removeEventListener("click", onDocClick);
-  }, [styleOpen]);
+  useOutsideClick(
+    styleOpen,
+    styleSelectorRef,
+    useCallback(() => setStyleOpen(false), []),
+  );
 
-  useEffect(() => {
-    if (!profileOpen) return;
-    function onDocClick(e) {
-      const target = e.target instanceof Node ? e.target : null;
-      if (
-        target &&
-        profileRef.current &&
-        !profileRef.current.contains(target)
-      )
-        setProfileOpen(false);
-    }
-    document.addEventListener("click", onDocClick, { passive: true });
-    return () => document.removeEventListener("click", onDocClick);
-  }, [profileOpen]);
+  useOutsideClick(
+    profileOpen,
+    profileRef,
+    useCallback(() => setProfileOpen(false), []),
+  );
 
   useEffect(() => {
     localStorage.setItem("hp_profile", JSON.stringify(profile));
@@ -1792,6 +1816,7 @@ export default function Help() {
     }
 
     const token = cancellationToken();
+    searchSuggestTokenRef.current = token;
     const timeout = setTimeout(async () => {
       try {
         setSearchSuggestLoading(true);
@@ -1822,6 +1847,10 @@ export default function Help() {
     if (searchSuggestions.length === 0) return;
     function onPointerDown(e) {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
+        // Cancel the in-flight autocomplete request too, otherwise a slow
+        // response landing after dismissal silently reopens the dropdown.
+        searchSuggestTokenRef.current?.cancel();
+        setSearchSuggestLoading(false);
         setSearchSuggestions([]);
         setActiveSuggestion(-1);
       }
@@ -1838,10 +1867,15 @@ export default function Help() {
     if (mode !== "offer") return;
     const token = cancellationToken();
     let loading = false;
+    let timer = null;
+    const BASE_DELAY_MS = 5000;
+    const MAX_DELAY_MS = 60000;
+    let consecutiveFailures = 0;
 
     async function load() {
       if (loading) return;
       loading = true;
+      let failed = false;
       try {
         const ids = await getActiveRequests();
         const requests = await Promise.all(
@@ -1861,15 +1895,24 @@ export default function Help() {
             return map.get(Number(current.id)) || null;
           });
         }
-      } catch (_) {}
+      } catch (_) {
+        failed = true;
+      }
       loading = false;
+
+      consecutiveFailures = failed ? consecutiveFailures + 1 : 0;
+      const delay = failed
+        ? Math.min(BASE_DELAY_MS * 2 ** consecutiveFailures, MAX_DELAY_MS)
+        : BASE_DELAY_MS;
+      if (token.active) {
+        timer = setTimeout(load, delay);
+      }
     }
 
     load();
-    const interval = setInterval(load, 5000);
     return () => {
       token.cancel();
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
   }, [mode]);
 
@@ -1882,15 +1925,36 @@ export default function Help() {
     setLocationError("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation([pos.coords.latitude, pos.coords.longitude]);
         setLocating(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Reject out-of-range/non-finite coordinates here instead of
+        // letting them reach encodeCoord() during a contract write, where
+        // an out-of-range value throws deep inside a pending transaction
+        // rather than failing at acquisition time with a clear message.
+        const valid =
+          Number.isFinite(lat) &&
+          Number.isFinite(lng) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180;
+        if (!valid) {
+          setLocationError(
+            "Received an invalid location. Search by city, or click the map to drop a pin.",
+          );
+          return;
+        }
+        setLocation([lat, lng]);
       },
       (err) => {
         setLocating(false);
         setLocationError(
           err.code === 1
             ? "Location blocked. Search by city, or click the map to drop a pin."
-            : "Could not get location. Search below or click the map.",
+            : err.code === 3
+              ? "Location request timed out. Search below or click the map."
+              : "Could not get location. Search below or click the map.",
         );
       },
       { timeout: 12000 },
@@ -2092,9 +2156,13 @@ export default function Help() {
     dispatchZk({ type: "RESET" });
   }
 
-  // O(1) removal: Map keyed by numeric id — no linear scan
+  // O(1) removal: Map keyed by numeric id — no linear scan.
+  // NaN is rejected up front: every unparseable id would otherwise coerce to
+  // the same NaN key, so distinct requests could collide and clobber or
+  // remove each other's state (a request from one id evicting another's).
   function removeOpenRequest(reqId) {
     const key = Number(reqId);
+    if (!Number.isFinite(key)) return;
     setSelectedRequest((current) =>
       Number(current?.id) === key ? null : current,
     );
@@ -2108,7 +2176,8 @@ export default function Help() {
 
   function syncOpenRequest(reqId, fresh) {
     const key = Number(reqId);
-    const request = { ...fresh, id: reqId };
+    if (!Number.isFinite(key)) return null;
+    const request = { ...fresh, id: key };
     setOpenRequests((prev) => {
       const next = new Map(prev);
       next.set(key, request);
@@ -2137,16 +2206,21 @@ export default function Help() {
   const _refreshLocks = new Map();
 
   async function refreshPendingRequest(reqId) {
+    // Normalize before locking/keying: a raw reqId can arrive as a string or
+    // number for the same request, and coercing only after the lock check
+    // let concurrent refreshes of the same id race past this guard.
+    const key = Number(reqId);
+    if (!Number.isFinite(key)) return null;
     // Prevent concurrent refreshes of same request to avoid race conditions
-    if (_refreshLocks.has(reqId)) {
+    if (_refreshLocks.has(key)) {
       return null;
     }
-    _refreshLocks.set(reqId, true);
+    _refreshLocks.set(key, true);
 
     try {
-      const fresh = await getRequest(reqId);
+      const fresh = await getRequest(key);
       if (!fresh || fresh.status !== "Pending") {
-        removeOpenRequest(reqId);
+        removeOpenRequest(key);
         // Non-blocking error handling to prevent main thread blocking
         // and smart contract access control bypass
         setRequestError(requestUnavailableMessage(fresh));
@@ -2156,9 +2230,9 @@ export default function Help() {
       }
       // Clear any previous error on successful refresh
       setRequestError("");
-      return syncOpenRequest(reqId, fresh);
+      return syncOpenRequest(key, fresh);
     } finally {
-      _refreshLocks.delete(reqId);
+      _refreshLocks.delete(key);
     }
   }
 
@@ -2604,7 +2678,12 @@ export default function Help() {
           ids.map((id) => getRequest(id).catch(() => null)),
         );
         const filtered = results.filter(
-          (r) => r && r.requester === activeWalletAddress,
+          (r) =>
+            r &&
+            typeof r.requester === "string" &&
+            r.requester === activeWalletAddress &&
+            Number.isFinite(r.id) &&
+            Number.isFinite(r.created_at),
         );
         filtered.sort((a, b) => b.created_at - a.created_at);
         if (token.active) setMyRequests(filtered);
@@ -3124,19 +3203,24 @@ export default function Help() {
                             min
                           </>
                         )}
-                        {location && responders[0] && (
-                          <>
-                            {" "}
-                            ·{" "}
-                            {Math.round(
-                              distance(location, [
-                                responders[0].lat,
-                                responders[0].lng,
-                              ]) * 10,
-                            ) / 10}{" "}
-                            km away
-                          </>
-                        )}
+                        {location &&
+                          responders[0] &&
+                          distance(location, [
+                            responders[0].lat,
+                            responders[0].lng,
+                          ]) != null && (
+                            <>
+                              {" "}
+                              ·{" "}
+                              {Math.round(
+                                distance(location, [
+                                  responders[0].lat,
+                                  responders[0].lng,
+                                ]) * 10,
+                              ) / 10}{" "}
+                              km away
+                            </>
+                          )}
                       </div>
                     </div>
                   )}
