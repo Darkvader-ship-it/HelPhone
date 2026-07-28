@@ -2083,9 +2083,13 @@ export default function Help() {
     dispatchZk({ type: "RESET" });
   }
 
-  // O(1) removal: Map keyed by numeric id — no linear scan
+  // O(1) removal: Map keyed by numeric id — no linear scan.
+  // NaN is rejected up front: every unparseable id would otherwise coerce to
+  // the same NaN key, so distinct requests could collide and clobber or
+  // remove each other's state (a request from one id evicting another's).
   function removeOpenRequest(reqId) {
     const key = Number(reqId);
+    if (!Number.isFinite(key)) return;
     setSelectedRequest((current) =>
       Number(current?.id) === key ? null : current,
     );
@@ -2099,7 +2103,8 @@ export default function Help() {
 
   function syncOpenRequest(reqId, fresh) {
     const key = Number(reqId);
-    const request = { ...fresh, id: reqId };
+    if (!Number.isFinite(key)) return null;
+    const request = { ...fresh, id: key };
     setOpenRequests((prev) => {
       const next = new Map(prev);
       next.set(key, request);
@@ -2128,16 +2133,21 @@ export default function Help() {
   const _refreshLocks = new Map();
 
   async function refreshPendingRequest(reqId) {
+    // Normalize before locking/keying: a raw reqId can arrive as a string or
+    // number for the same request, and coercing only after the lock check
+    // let concurrent refreshes of the same id race past this guard.
+    const key = Number(reqId);
+    if (!Number.isFinite(key)) return null;
     // Prevent concurrent refreshes of same request to avoid race conditions
-    if (_refreshLocks.has(reqId)) {
+    if (_refreshLocks.has(key)) {
       return null;
     }
-    _refreshLocks.set(reqId, true);
+    _refreshLocks.set(key, true);
 
     try {
-      const fresh = await getRequest(reqId);
+      const fresh = await getRequest(key);
       if (!fresh || fresh.status !== "Pending") {
-        removeOpenRequest(reqId);
+        removeOpenRequest(key);
         // Non-blocking error handling to prevent main thread blocking
         // and smart contract access control bypass
         setRequestError(requestUnavailableMessage(fresh));
@@ -2147,9 +2157,9 @@ export default function Help() {
       }
       // Clear any previous error on successful refresh
       setRequestError("");
-      return syncOpenRequest(reqId, fresh);
+      return syncOpenRequest(key, fresh);
     } finally {
-      _refreshLocks.delete(reqId);
+      _refreshLocks.delete(key);
     }
   }
 
