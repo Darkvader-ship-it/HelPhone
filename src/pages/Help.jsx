@@ -215,7 +215,7 @@ function anonymizeLocation(location) {
   ];
 }
 
-function privateRequestLabel(id) {
+export function privateRequestLabel(id) {
   // Guard against non-string/non-number ids (e.g. an object slipping through
   // from a malformed contract read) rendering as "[object Object]" — fall
   // back to "pending" for anything that isn't a usable primitive.
@@ -230,14 +230,14 @@ function privateRequestLabel(id) {
 // value never produces a broken or unexpectedly-shaped explorer URL.
 const TX_HASH_PATTERN = /^[0-9a-f]{16,64}$/i;
 
-function txExplorerUrl(hash) {
+export function txExplorerUrl(hash) {
   if (typeof hash !== "string") return null;
   const trimmed = hash.trim();
   if (!TX_HASH_PATTERN.test(trimmed)) return null;
   return `https://stellar.expert/explorer/testnet/tx/${trimmed}`;
 }
 
-function ExplorerLink({ label, hash }) {
+export function ExplorerLink({ label, hash }) {
   const url = txExplorerUrl(hash);
   if (!url) return null;
   const safeLabel = typeof label === "string" && label ? label : "transaction";
@@ -554,7 +554,7 @@ function Step({ n, title, subtitle, done, active, children }) {
   );
 }
 
-function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
+export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
   const [step, setStep] = useState(0);
   const dialogRef = useRef(null);
   const lastFocusedRef = useRef(null);
