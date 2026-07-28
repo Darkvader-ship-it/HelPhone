@@ -1594,6 +1594,20 @@ export function safeToggleClass(
   return false;
 }
 
+function useOutsideClick(active, ref, onOutside) {
+  useEffect(() => {
+    if (!active) return;
+    function onDocClick(e) {
+      const target = e.target instanceof Node ? e.target : null;
+      if (target && ref.current && !ref.current.contains(target)) {
+        onOutside();
+      }
+    }
+    document.addEventListener("click", onDocClick, { passive: true });
+    return () => document.removeEventListener("click", onDocClick);
+  }, [active, ref, onOutside]);
+}
+
 export default function Help() {
   const [mode, setMode] = useState("get");
 
@@ -1747,35 +1761,17 @@ export default function Help() {
     safeToggleClass(sidebarRef.current, showMobileForm);
   }, [showMobileForm]);
 
-  useEffect(() => {
-    if (!styleOpen) return;
-    function onDocClick(e) {
-      const target = e.target instanceof Node ? e.target : null;
-      if (
-        target &&
-        styleSelectorRef.current &&
-        !styleSelectorRef.current.contains(target)
-      )
-        setStyleOpen(false);
-    }
-    document.addEventListener("click", onDocClick, { passive: true });
-    return () => document.removeEventListener("click", onDocClick);
-  }, [styleOpen]);
+  useOutsideClick(
+    styleOpen,
+    styleSelectorRef,
+    useCallback(() => setStyleOpen(false), []),
+  );
 
-  useEffect(() => {
-    if (!profileOpen) return;
-    function onDocClick(e) {
-      const target = e.target instanceof Node ? e.target : null;
-      if (
-        target &&
-        profileRef.current &&
-        !profileRef.current.contains(target)
-      )
-        setProfileOpen(false);
-    }
-    document.addEventListener("click", onDocClick, { passive: true });
-    return () => document.removeEventListener("click", onDocClick);
-  }, [profileOpen]);
+  useOutsideClick(
+    profileOpen,
+    profileRef,
+    useCallback(() => setProfileOpen(false), []),
+  );
 
   useEffect(() => {
     localStorage.setItem("hp_profile", JSON.stringify(profile));
@@ -1839,10 +1835,15 @@ export default function Help() {
     if (mode !== "offer") return;
     const token = cancellationToken();
     let loading = false;
+    let timer = null;
+    const BASE_DELAY_MS = 5000;
+    const MAX_DELAY_MS = 60000;
+    let consecutiveFailures = 0;
 
     async function load() {
       if (loading) return;
       loading = true;
+      let failed = false;
       try {
         const ids = await getActiveRequests();
         const requests = await Promise.all(
@@ -1862,15 +1863,24 @@ export default function Help() {
             return map.get(Number(current.id)) || null;
           });
         }
-      } catch (_) {}
+      } catch (_) {
+        failed = true;
+      }
       loading = false;
+
+      consecutiveFailures = failed ? consecutiveFailures + 1 : 0;
+      const delay = failed
+        ? Math.min(BASE_DELAY_MS * 2 ** consecutiveFailures, MAX_DELAY_MS)
+        : BASE_DELAY_MS;
+      if (token.active) {
+        timer = setTimeout(load, delay);
+      }
     }
 
     load();
-    const interval = setInterval(load, 5000);
     return () => {
       token.cancel();
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
   }, [mode]);
 
@@ -2636,7 +2646,12 @@ export default function Help() {
           ids.map((id) => getRequest(id).catch(() => null)),
         );
         const filtered = results.filter(
-          (r) => r && r.requester === activeWalletAddress,
+          (r) =>
+            r &&
+            typeof r.requester === "string" &&
+            r.requester === activeWalletAddress &&
+            Number.isFinite(r.id) &&
+            Number.isFinite(r.created_at),
         );
         filtered.sort((a, b) => b.created_at - a.created_at);
         if (token.active) setMyRequests(filtered);
