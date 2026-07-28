@@ -68,22 +68,25 @@ async function getCircuitArtifact() {
   return _circuitArtifact
 }
 
+// Encapsulated at module scope so the pattern table is built once, not
+// re-created inside every createBarretenbergLogger() closure.
+const BB_LOG_PATTERNS = [
+  { pattern: /Fetching bb wasm/i, label: 'Loading Barretenberg WASM' },
+  { pattern: /Compiling bb wasm/i, label: 'Compiling Barretenberg WASM' },
+  { pattern: /Compilation of bb wasm complete/i, label: 'Barretenberg WASM ready' },
+  { pattern: /Initializing bb wasm/i, label: 'Starting Barretenberg prover worker' },
+  { pattern: /Creating .* worker threads/i, label: 'Starting Barretenberg worker threads' },
+  { pattern: /Falling back to one thread/i, label: 'Using single-thread prover mode' },
+]
+
 function createBarretenbergLogger(onLog) {
   const seen = new Set()
   return message => {
     const text = String(message || '')
-    let mapped = ''
-
-    if (/Fetching bb wasm/i.test(text)) mapped = 'Loading Barretenberg WASM'
-    else if (/Compiling bb wasm/i.test(text)) mapped = 'Compiling Barretenberg WASM'
-    else if (/Compilation of bb wasm complete/i.test(text)) mapped = 'Barretenberg WASM ready'
-    else if (/Initializing bb wasm/i.test(text)) mapped = 'Starting Barretenberg prover worker'
-    else if (/Creating .* worker threads/i.test(text)) mapped = 'Starting Barretenberg worker threads'
-    else if (/Falling back to one thread/i.test(text)) mapped = 'Using single-thread prover mode'
-
-    if (mapped && !seen.has(mapped)) {
-      seen.add(mapped)
-      onLog(mapped)
+    const match = BB_LOG_PATTERNS.find(({ pattern }) => pattern.test(text))
+    if (match && !seen.has(match.label)) {
+      seen.add(match.label)
+      onLog(match.label)
     }
   }
 }

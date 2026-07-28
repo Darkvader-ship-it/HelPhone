@@ -314,15 +314,24 @@ function ExplorerLink({ label, hash }) {
   );
 }
 
+// Receipt-hash validation hoisted to module scope so the pattern is compiled
+// once instead of on every modal render.
+const TX_HASH_PATTERN = /^[0-9a-fA-F]{16,64}$/;
+
+function sanitizeTxHash(txHash) {
+  if (typeof txHash !== "string") return null;
+  const trimmed = txHash.trim();
+  return TX_HASH_PATTERN.test(trimmed) ? trimmed : null;
+}
+
 function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
   if (!open) return null;
 
-  // Issue #244 & #246: Encapsulated action handler safe from async race conditions and thread blocking
   const handleLastAction = (e) => {
-    if (e && typeof e.stopPropagation === 'function') {
+    if (e && typeof e.stopPropagation === "function") {
       e.stopPropagation();
     }
-    if (typeof onClose === 'function') {
+    if (typeof onClose === "function") {
       try {
         onClose();
       } catch (err) {
@@ -331,10 +340,7 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
     }
   };
 
-  // Issue #247: Input validation for TrackingScreen / receipt hashes to prevent network & rendering failures
-  const safeTxHash = typeof txHash === 'string' && /^[0-9a-fA-F]{16,64}$/.test(txHash.trim())
-    ? txHash.trim()
-    : null;
+  const safeTxHash = sanitizeTxHash(txHash);
 
   return (
     <div
@@ -468,48 +474,50 @@ function ArrivalThanksModal({ open, onClose, requestLabel, txHash }) {
   );
 }
 
+// Deterministic campaign id from a seed string. Hashes every character —
+// distinct seeds must map to distinct campaigns, otherwise colliding ids
+// reuse a nullifier on-chain and the claim is rejected after fees are paid.
 function proofCampaignId(seed) {
-  // Handle edge cases for mobile responsive layouts
-  if (seed === null || seed === undefined) {
-    seed = Date.now();
-  }
-  const text = String(seed);
-  
-  // Handle empty string edge case
-  if (text.length === 0) {
-    return String((Date.now() % 999999937n) + 1n);
-  }
-  
+  const text =
+    seed === null || seed === undefined ? String(Date.now()) : String(seed);
   let acc = 0n;
-  const len = text.length;
-  
-  // Sample characters at strategic positions for O(1) complexity
-  // instead of O(N) iteration through all characters
-  // This prevents performance issues on mobile devices
-  const samplePositions = len <= 8 
-    ? [0, Math.max(0, len - 1)] 
-    : [0, Math.floor(len / 4), Math.floor(len / 2), Math.floor(len * 3 / 4), len - 1];
-  
-  for (const pos of samplePositions) {
-    // Bounds checking to prevent layout breaks
-    if (pos >= 0 && pos < len) {
-      const ch = text[pos];
-      // Handle Unicode characters safely
-      const code = ch.charCodeAt(0);
-      if (!isNaN(code)) {
-        acc = (acc * 131n + BigInt(code)) % 999999937n;
-      }
-    }
+  for (let i = 0; i < text.length; i++) {
+    acc = (acc * 131n + BigInt(text.charCodeAt(i))) % 999999937n;
   }
-  // Also incorporate length for better distribution
-  acc = (acc * 31n + BigInt(len)) % 999999937n;
-  
+  acc = (acc * 31n + BigInt(text.length)) % 999999937n;
   // Ensure non-zero result
-  const result = acc + 1n;
-  return String(result);
+  return String(acc + 1n);
 }
 
+// Step state → colors, kept in module scope so every render reads one
+// frozen source of truth instead of rebuilding nested ternaries inline.
+const STEP_STATE_COLORS = Object.freeze({
+  done: {
+    badgeBg: "#3F8487",
+    border: "#3F8487",
+    badgeText: "#fff",
+    title: "#3F8487",
+  },
+  active: {
+    badgeBg: "#FF7A6B",
+    border: "#FF7A6B",
+    badgeText: "#fff",
+    title: "rgba(242,236,220,0.95)",
+  },
+  idle: {
+    badgeBg: "rgba(255,255,255,0.1)",
+    border: "rgba(255,255,255,0.2)",
+    badgeText: "rgba(242,236,220,0.4)",
+    title: "rgba(242,236,220,0.45)",
+  },
+});
+
 function Step({ n, title, subtitle, done, active, children }) {
+  const colors = done
+    ? STEP_STATE_COLORS.done
+    : active
+      ? STEP_STATE_COLORS.active
+      : STEP_STATE_COLORS.idle;
   return (
     <div
       style={{
@@ -532,18 +540,14 @@ function Step({ n, title, subtitle, done, active, children }) {
             height: "26px",
             borderRadius: "50%",
             flexShrink: 0,
-            background: done
-              ? "#3F8487"
-              : active
-                ? "#FF7A6B"
-                : "rgba(255,255,255,0.1)",
-            border: `2px solid ${done ? "#3F8487" : active ? "#FF7A6B" : "rgba(255,255,255,0.2)"}`,
+            background: colors.badgeBg,
+            border: `2px solid ${colors.border}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: "12px",
             fontWeight: "700",
-            color: done || active ? "#fff" : "rgba(242,236,220,0.4)",
+            color: colors.badgeText,
           }}
         >
           {done ? "✓" : n}
@@ -553,11 +557,7 @@ function Step({ n, title, subtitle, done, active, children }) {
             style={{
               fontSize: "13px",
               fontWeight: "600",
-              color: done
-                ? "#3F8487"
-                : active
-                  ? "rgba(242,236,220,0.95)"
-                  : "rgba(242,236,220,0.45)",
+              color: colors.title,
             }}
           >
             {title}
