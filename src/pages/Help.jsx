@@ -1617,6 +1617,11 @@ export default function Help() {
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const searchBoxRef = useRef(null);
   const searchAbortRef = useRef(null);
+  // Lets the outside-click handler cancel the in-flight autocomplete fetch.
+  // Without this, a slow/timed-out request that resolves after the user
+  // dismisses the dropdown would silently repopulate suggestions they
+  // already closed.
+  const searchSuggestTokenRef = useRef(null);
 
   // Clean up searchBoxRef on unmount to prevent memory leaks (#253)
   useEffect(() => {
@@ -1783,6 +1788,7 @@ export default function Help() {
     }
 
     const token = cancellationToken();
+    searchSuggestTokenRef.current = token;
     const timeout = setTimeout(async () => {
       try {
         setSearchSuggestLoading(true);
@@ -1813,6 +1819,10 @@ export default function Help() {
     if (searchSuggestions.length === 0) return;
     function onPointerDown(e) {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
+        // Cancel the in-flight autocomplete request too, otherwise a slow
+        // response landing after dismissal silently reopens the dropdown.
+        searchSuggestTokenRef.current?.cancel();
+        setSearchSuggestLoading(false);
         setSearchSuggestions([]);
         setActiveSuggestion(-1);
       }
@@ -1873,15 +1883,36 @@ export default function Help() {
     setLocationError("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation([pos.coords.latitude, pos.coords.longitude]);
         setLocating(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Reject out-of-range/non-finite coordinates here instead of
+        // letting them reach encodeCoord() during a contract write, where
+        // an out-of-range value throws deep inside a pending transaction
+        // rather than failing at acquisition time with a clear message.
+        const valid =
+          Number.isFinite(lat) &&
+          Number.isFinite(lng) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180;
+        if (!valid) {
+          setLocationError(
+            "Received an invalid location. Search by city, or click the map to drop a pin.",
+          );
+          return;
+        }
+        setLocation([lat, lng]);
       },
       (err) => {
         setLocating(false);
         setLocationError(
           err.code === 1
             ? "Location blocked. Search by city, or click the map to drop a pin."
-            : "Could not get location. Search below or click the map.",
+            : err.code === 3
+              ? "Location request timed out. Search below or click the map."
+              : "Could not get location. Search below or click the map.",
         );
       },
       { timeout: 12000 },
@@ -2083,9 +2114,13 @@ export default function Help() {
     dispatchZk({ type: "RESET" });
   }
 
-  // O(1) removal: Map keyed by numeric id — no linear scan
+  // O(1) removal: Map keyed by numeric id — no linear scan.
+  // NaN is rejected up front: every unparseable id would otherwise coerce to
+  // the same NaN key, so distinct requests could collide and clobber or
+  // remove each other's state (a request from one id evicting another's).
   function removeOpenRequest(reqId) {
     const key = Number(reqId);
+    if (!Number.isFinite(key)) return;
     setSelectedRequest((current) =>
       Number(current?.id) === key ? null : current,
     );
@@ -2099,7 +2134,8 @@ export default function Help() {
 
   function syncOpenRequest(reqId, fresh) {
     const key = Number(reqId);
-    const request = { ...fresh, id: reqId };
+    if (!Number.isFinite(key)) return null;
+    const request = { ...fresh, id: key };
     setOpenRequests((prev) => {
       const next = new Map(prev);
       next.set(key, request);
@@ -2128,16 +2164,21 @@ export default function Help() {
   const _refreshLocks = new Map();
 
   async function refreshPendingRequest(reqId) {
+    // Normalize before locking/keying: a raw reqId can arrive as a string or
+    // number for the same request, and coercing only after the lock check
+    // let concurrent refreshes of the same id race past this guard.
+    const key = Number(reqId);
+    if (!Number.isFinite(key)) return null;
     // Prevent concurrent refreshes of same request to avoid race conditions
-    if (_refreshLocks.has(reqId)) {
+    if (_refreshLocks.has(key)) {
       return null;
     }
-    _refreshLocks.set(reqId, true);
+    _refreshLocks.set(key, true);
 
     try {
-      const fresh = await getRequest(reqId);
+      const fresh = await getRequest(key);
       if (!fresh || fresh.status !== "Pending") {
-        removeOpenRequest(reqId);
+        removeOpenRequest(key);
         // Non-blocking error handling to prevent main thread blocking
         // and smart contract access control bypass
         setRequestError(requestUnavailableMessage(fresh));
@@ -2147,9 +2188,9 @@ export default function Help() {
       }
       // Clear any previous error on successful refresh
       setRequestError("");
-      return syncOpenRequest(reqId, fresh);
+      return syncOpenRequest(key, fresh);
     } finally {
-      _refreshLocks.delete(reqId);
+      _refreshLocks.delete(key);
     }
   }
 
