@@ -1617,6 +1617,11 @@ export default function Help() {
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const searchBoxRef = useRef(null);
   const searchAbortRef = useRef(null);
+  // Lets the outside-click handler cancel the in-flight autocomplete fetch.
+  // Without this, a slow/timed-out request that resolves after the user
+  // dismisses the dropdown would silently repopulate suggestions they
+  // already closed.
+  const searchSuggestTokenRef = useRef(null);
 
   // Clean up searchBoxRef on unmount to prevent memory leaks (#253)
   useEffect(() => {
@@ -1783,6 +1788,7 @@ export default function Help() {
     }
 
     const token = cancellationToken();
+    searchSuggestTokenRef.current = token;
     const timeout = setTimeout(async () => {
       try {
         setSearchSuggestLoading(true);
@@ -1813,6 +1819,10 @@ export default function Help() {
     if (searchSuggestions.length === 0) return;
     function onPointerDown(e) {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
+        // Cancel the in-flight autocomplete request too, otherwise a slow
+        // response landing after dismissal silently reopens the dropdown.
+        searchSuggestTokenRef.current?.cancel();
+        setSearchSuggestLoading(false);
         setSearchSuggestions([]);
         setActiveSuggestion(-1);
       }
@@ -1873,15 +1883,36 @@ export default function Help() {
     setLocationError("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation([pos.coords.latitude, pos.coords.longitude]);
         setLocating(false);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Reject out-of-range/non-finite coordinates here instead of
+        // letting them reach encodeCoord() during a contract write, where
+        // an out-of-range value throws deep inside a pending transaction
+        // rather than failing at acquisition time with a clear message.
+        const valid =
+          Number.isFinite(lat) &&
+          Number.isFinite(lng) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lng >= -180 &&
+          lng <= 180;
+        if (!valid) {
+          setLocationError(
+            "Received an invalid location. Search by city, or click the map to drop a pin.",
+          );
+          return;
+        }
+        setLocation([lat, lng]);
       },
       (err) => {
         setLocating(false);
         setLocationError(
           err.code === 1
             ? "Location blocked. Search by city, or click the map to drop a pin."
-            : "Could not get location. Search below or click the map.",
+            : err.code === 3
+              ? "Location request timed out. Search below or click the map."
+              : "Could not get location. Search below or click the map.",
         );
       },
       { timeout: 12000 },
