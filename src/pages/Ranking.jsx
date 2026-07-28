@@ -12,20 +12,25 @@ export default function Ranking() {
   const [period, setPeriod] = useState('All Time')
 
   useEffect(() => {
+    let ignore = false
     async function load() {
       setLoading(true)
       try {
         const entries = await getRanking()
+        if (ignore) return
         const sorted = entries
           .sort((a, b) => b.total_arrivals - a.total_arrivals)
           .slice(0, 20)
         setRows(sorted)
       } catch {
-        setRows([])
+        if (!ignore) setRows([])
       }
-      setLoading(false)
+      if (!ignore) setLoading(false)
     }
     load()
+    return () => {
+      ignore = true
+    }
   }, [period])
 
   return (
