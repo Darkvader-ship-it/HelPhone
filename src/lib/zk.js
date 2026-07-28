@@ -332,17 +332,38 @@ function getOrCreateSecret() {
   return secret
 }
 
+// Each public input must fit in a single 32-byte BE field. A value outside
+// [0, 2^256) would overflow the fixed-width slice below and silently drop
+// its high-order bytes instead of throwing — corrupting the encoded public
+// inputs the contract verifies against. Values sourced from the ZK prover
+// server response (e.g. the nullifier) are untrusted network input and must
+// be checked here before encoding, not assumed well-formed.
+const UINT256_MAX = (1n << 256n) - 1n
+
+function parseFieldElement(value, label) {
+  let big
+  try {
+    big = BigInt(value)
+  } catch {
+    throw new Error(`${label} is not a valid integer: ${JSON.stringify(value)}`)
+  }
+  if (big < 0n || big > UINT256_MAX) {
+    throw new Error(`${label} is out of range for a 32-byte field element: ${value}`)
+  }
+  return big
+}
+
 // Build 224-byte public inputs buffer for aegis_vault.claim_aid (7 × 32-byte BE fields)
 // Layout: box_x_min | box_x_max | box_y_min | box_y_max | campaign_id | recipient_address | nullifier
 function buildPublicInputsBytes(boxXMin, boxXMax, boxYMin, boxYMax, campaignId, recipientField, nullifier) {
   const fields = [
-    BigInt(boxXMin),
-    BigInt(boxXMax),
-    BigInt(boxYMin),
-    BigInt(boxYMax),
-    BigInt(campaignId),
-    BigInt(recipientField),
-    BigInt(nullifier),
+    parseFieldElement(boxXMin, 'box_x_min'),
+    parseFieldElement(boxXMax, 'box_x_max'),
+    parseFieldElement(boxYMin, 'box_y_min'),
+    parseFieldElement(boxYMax, 'box_y_max'),
+    parseFieldElement(campaignId, 'campaign_id'),
+    parseFieldElement(recipientField, 'recipient_address'),
+    parseFieldElement(nullifier, 'nullifier'),
   ]
   const buf = new Uint8Array(224)
   fields.forEach((f, i) => {
