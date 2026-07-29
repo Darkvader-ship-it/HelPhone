@@ -17,7 +17,7 @@ use soroban_sdk::{
 // [192..224] nullifier       Poseidon2(secret_id, campaign_id) — proof return value
 const CAMPAIGN_INPUTS_LEN: usize = 160;
 const PUBLIC_INPUTS_LEN: usize = 224;
-const PAYOUT_STROOP: i128 = 50 * 10_000_000; // 50 USDC (7 decimals)
+const DEFAULT_PAYOUT_STROOP: i128 = 50 * 10_000_000; // 50 USDC (7 decimals)
 const BN254_FIELD_PRIME: [u8; 32] = [
     0x30, 0x64, 0x4e, 0x72, 0xe1, 0x31, 0xa0, 0x29,
     0xb8, 0x50, 0x45, 0xb6, 0x81, 0x81, 0x58, 0x5d,
@@ -40,6 +40,8 @@ pub enum VaultError {
     TokenNotSet = 6,
     RecipientMismatch = 7,
     Overflow = 8,
+    NotAuthorized = 9,
+    InvalidPayout = 10,
 }
 
 #[contractevent(topics = ["claimed"], data_format = "map")]
@@ -60,9 +62,18 @@ pub struct FundedEvent<'a> {
 
 fn key_verifier()  -> Symbol { symbol_short!("verifier") }
 fn key_token()     -> Symbol { symbol_short!("token") }
+fn key_admin()     -> Symbol { symbol_short!("admin") }
+fn key_payout()    -> Symbol { symbol_short!("payout") }
 fn key_nullifier_prefix() -> Symbol { symbol_short!("nf") }
 fn key_campaign_prefix()  -> Symbol { symbol_short!("camp") }
 fn key_zone_prefix()      -> Symbol { symbol_short!("zone") }
+
+fn payout_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&key_payout())
+        .unwrap_or(DEFAULT_PAYOUT_STROOP)
+}
 
 fn parse_public_inputs(
     env: &Env,
@@ -159,10 +170,40 @@ impl AegisVault {
         env: Env,
         verifier: Address,
         token: Address,
+        admin: Address,
     ) -> Result<(), VaultError> {
         env.storage().instance().set(&key_verifier(), &verifier);
         env.storage().instance().set(&key_token(), &token);
+        env.storage().instance().set(&key_admin(), &admin);
+        env.storage().instance().set(&key_payout(), &DEFAULT_PAYOUT_STROOP);
         Ok(())
+    }
+
+    /// Update the aid payout amount in token base units. Admin authorization is required.
+    pub fn set_payout_amount(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<(), VaultError> {
+        if amount <= 0 {
+            return Err(VaultError::InvalidPayout);
+        }
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&key_admin())
+            .ok_or(VaultError::NotAuthorized)?;
+        if admin != stored_admin {
+            return Err(VaultError::NotAuthorized);
+        }
+        admin.require_auth();
+        env.storage().instance().set(&key_payout(), &amount);
+        Ok(())
+    }
+
+    /// Returns the current aid payout amount in token base units.
+    pub fn payout_amount(env: Env) -> i128 {
+        payout_amount(&env)
     }
 
     /// Fund a campaign zone. Transfers `amount` USDC from funder to this contract.
@@ -251,7 +292,8 @@ impl AegisVault {
         let balance: i128 = env
             .storage().instance().get(&camp_key)
             .unwrap_or(0i128);
-        if balance < PAYOUT_STROOP {
+        let payout = payout_amount(&env);
+        if balance < payout {
             return Err(VaultError::InsufficientFunds);
         }
         let zone_key = (key_zone_prefix(), campaign_id.clone());
@@ -272,13 +314,13 @@ impl AegisVault {
         env.storage().instance().set(&nf_key, &true);
 
         // Deduct from campaign balance and pay recipient.
-        env.storage().instance().set(&camp_key, &(balance - PAYOUT_STROOP));
+        env.storage().instance().set(&camp_key, &(balance - payout));
 
         let token_addr: Address = env
             .storage().instance().get(&key_token())
             .ok_or(VaultError::TokenNotSet)?;
         let token_client = token::TokenClient::new(&env, &token_addr);
-        token_client.transfer(&env.current_contract_address(), &recipient, &PAYOUT_STROOP);
+        token_client.transfer(&env.current_contract_address(), &recipient, &payout);
 
         ClaimedEvent {
             campaign_id: &campaign_id,
@@ -306,10 +348,29 @@ impl AegisVault {
 #[cfg(test)]
 mod test {
     use super::*;
+    use soroban_sdk::testutils::Address as _;
 
     #[test]
     fn test_vault_error_overflow() {
         let err = VaultError::Overflow;
         assert_eq!(err as u32, 8);
+    }
+
+    #[test]
+    fn admin_can_update_payout_amount() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let verifier = Address::generate(&env);
+        let token = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let contract_id = env.register(AegisVault, (&verifier, &token, &admin));
+        let client = AegisVaultClient::new(&env, &contract_id);
+
+        assert_eq!(client.payout_amount(), DEFAULT_PAYOUT_STROOP);
+
+        client.set_payout_amount(&admin, &75_000_000);
+
+        assert_eq!(client.payout_amount(), 75_000_000);
     }
 }
