@@ -153,16 +153,14 @@ export function distance(a, b) {
     return null;
   }
   const R = 6371;
-  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const DEG2RAD = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * DEG2RAD;
+  const dLng = (b[1] - a[1]) * DEG2RAD;
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
   const h =
     sinLat * sinLat +
-    Math.cos((a[0] * Math.PI) / 180) *
-      Math.cos((b[0] * Math.PI) / 180) *
-      sinLng *
-      sinLng;
+    Math.cos(a[0] * DEG2RAD) * Math.cos(b[0] * DEG2RAD) * sinLng * sinLng;
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
