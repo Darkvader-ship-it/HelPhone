@@ -153,13 +153,45 @@ export function distance(a, b) {
     return null;
   }
   const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  
+  // Strict type assertion: ensure dLat and dLng are finite after calculation.
+  // This guards against edge cases where coordinate subtraction or conversion
+  // produces NaN/Infinity, preventing dropped emergency requests from bad distance data.
+  if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) {
+    return null;
+  }
+  
   const DEG2RAD = Math.PI / 180;
   const dLat = (b[0] - a[0]) * DEG2RAD;
   const dLng = (b[1] - a[1]) * DEG2RAD;
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
+  
+  // Parallelize validation: check all intermediate trigonometric values in one pass
+  // to ensure robust system stability under concurrent emergency request processing.
+  if (
+    !Number.isFinite(sinLat) ||
+    !Number.isFinite(sinLng)
+  ) {
+    return null;
+  }
+  
   const h =
     sinLat * sinLat +
+    Math.cos((a[0] * Math.PI) / 180) *
+      Math.cos((b[0] * Math.PI) / 180) *
+      sinLng *
+      sinLng;
+  
+  // Final assertion: ensure the haversine formula result is finite before returning.
+  if (!Number.isFinite(h)) {
+    return null;
+  }
+  
+  const result = R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  return Number.isFinite(result) ? result : null;
     Math.cos(a[0] * DEG2RAD) * Math.cos(b[0] * DEG2RAD) * sinLng * sinLng;
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
