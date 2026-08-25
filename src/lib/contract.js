@@ -154,14 +154,55 @@ function mapResponder(raw) {
   }
 }
 
+// ── Retry with exponential backoff (issue #178) ─────────────────
+// Network congestion drops RPC calls; retrying blindly on contract-logic
+// errors (AlreadyClaimed, WrongStatus, etc.) would just waste time since
+// those can never succeed on retry, so only transient/network-shaped
+// failures are retried. `err.contractCode` is set by buildContractError
+// once a response has actually been parsed as an on-chain error — that
+// is always non-retryable.
+const RETRY_MAX_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 1000
+
+function isRetryableError(err) {
+  if (err?.contractCode != null) return false
+  const msg = String(err?.message || err || '')
+  return /fetch|network|timeout|ECONNRESET|ETIMEDOUT|502|503|504|Failed to fetch/i.test(msg)
+}
+
+/** Runs `fn` with exponential backoff (1s, 2s, 4s, ...) on retryable
+ *  failures. Aborts and rethrows (with a clearer message) once
+ *  `maxAttempts` is exhausted — callers already surface thrown errors to
+ *  the user (see e.g. Help.jsx's `alert(err.message)` pattern), so this
+ *  is also how the user gets notified. */
+async function withRetry(fn, { label = 'request', maxAttempts = RETRY_MAX_ATTEMPTS } = {}) {
+  let lastErr
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!isRetryableError(err) || attempt === maxAttempts - 1) break
+      const delayMs = RETRY_BASE_DELAY_MS * 2 ** attempt
+      console.warn(`[retry] ${label} failed (attempt ${attempt + 1}/${maxAttempts}); retrying in ${delayMs}ms`, err?.message || err)
+      await new Promise(r => setTimeout(r, delayMs))
+    }
+  }
+  if (isRetryableError(lastErr)) {
+    throw new Error(`${label} failed after ${maxAttempts} attempts due to network congestion. Please try again.`)
+  }
+  throw lastErr
+}
+
 // ── Read helper ─────────────────────────────────────────────────
 async function simulateRead(call) {
-  const tx = new TransactionBuilder(_readSource(), { fee: BASE_FEE, networkPassphrase: NETWORK })
-    .addOperation(call)
-    .setTimeout(30)
-    .build()
-  const sim = await server.simulateTransaction(tx)
-  return sim
+  return withRetry(async () => {
+    const tx = new TransactionBuilder(_readSource(), { fee: BASE_FEE, networkPassphrase: NETWORK })
+      .addOperation(call)
+      .setTimeout(30)
+      .build()
+    return await server.simulateTransaction(tx)
+  }, { label: 'Reading from contract' })
 }
 
 async function resolveWalletAddress(wallet, fallback = '') {
