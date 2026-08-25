@@ -143,8 +143,6 @@ function MapController({ center, zoom = 14 }) {
 }
 
 export function distance(a, b) {
-  // Issue #226: guard against non-finite coords so a bad reading can't
-  // silently turn into NaN and get rendered as a distance.
   if (
     !Number.isFinite(a?.[0]) ||
     !Number.isFinite(a?.[1]) ||
@@ -154,47 +152,29 @@ export function distance(a, b) {
     return null;
   }
   const R = 6371;
-  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-  
-  // Strict type assertion: ensure dLat and dLng are finite after calculation.
-  // This guards against edge cases where coordinate subtraction or conversion
-  // produces NaN/Infinity, preventing dropped emergency requests from bad distance data.
-  if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) {
-    return null;
-  }
-  
   const DEG2RAD = Math.PI / 180;
   const dLat = (b[0] - a[0]) * DEG2RAD;
   const dLng = (b[1] - a[1]) * DEG2RAD;
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
-  
-  // Parallelize validation: check all intermediate trigonometric values in one pass
-  // to ensure robust system stability under concurrent emergency request processing.
-  if (
-    !Number.isFinite(sinLat) ||
-    !Number.isFinite(sinLng)
-  ) {
+
+  if (!Number.isFinite(sinLat) || !Number.isFinite(sinLng)) {
     return null;
   }
-  
+
   const h =
     sinLat * sinLat +
     Math.cos((a[0] * Math.PI) / 180) *
       Math.cos((b[0] * Math.PI) / 180) *
       sinLng *
       sinLng;
-  
-  // Final assertion: ensure the haversine formula result is finite before returning.
+
   if (!Number.isFinite(h)) {
     return null;
   }
-  
+
   const result = R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   return Number.isFinite(result) ? result : null;
-    Math.cos(a[0] * DEG2RAD) * Math.cos(b[0] * DEG2RAD) * sinLng * sinLng;
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 // Issue #227: pure builder extracted so RouteLine can memoize on it instead
@@ -367,10 +347,6 @@ export function ExplorerLink({ label, hash }) {
     </a>
   );
 }
-
-// Receipt-hash validation hoisted to module scope so the pattern is compiled
-// once instead of on every modal render.
-const TX_HASH_PATTERN = /^[0-9a-fA-F]{16,64}$/;
 
 function sanitizeTxHash(txHash) {
   if (typeof txHash !== "string") return null;
@@ -1978,12 +1954,14 @@ export default function Help() {
 
     const token = cancellationToken();
     searchSuggestTokenRef.current = token;
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
         setSearchSuggestLoading(true);
         const res = await token.wrap(
           fetch(
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery.trim())}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`,
+            { signal: controller.signal },
           ),
         );
         const data = res !== undefined ? await res.json() : null;
@@ -1996,10 +1974,11 @@ export default function Help() {
       } finally {
         if (token.active) setSearchSuggestLoading(false);
       }
-    }, 260);
+    }, 500);
 
     return () => {
       token.cancel();
+      controller.abort();
       clearTimeout(timeout);
     };
   }, [searchQuery]);
