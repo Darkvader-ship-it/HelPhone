@@ -1679,6 +1679,110 @@ function useOutsideClick(active, ref, onOutside) {
   }, [active, ref, onOutside]);
 }
 
+const ALL_CHARS = [
+  ...CHARS.default,
+  ...CHARS.male,
+  ...CHARS.female,
+  ...CHARS.undisclosed,
+];
+
+function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
+  if (!open) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avatar-select-title"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.68)",
+        zIndex: 10000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          maxHeight: "80vh",
+          borderRadius: "18px",
+          background: "#1c3535",
+          border: "1px solid rgba(63,132,135,0.32)",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.58)",
+          padding: "20px",
+          overflow: "auto",
+        }}
+      >
+        <h3
+          id="avatar-select-title"
+          style={{
+            margin: "0 0 4px",
+            fontFamily: "'Instrument Serif',serif",
+            fontWeight: 400,
+            fontSize: "22px",
+            color: "#F4ECDC",
+          }}
+        >
+          Choose your avatar
+        </h3>
+        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(242,236,220,0.4)" }}>
+          Pick a character to represent you on the map.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+          {ALL_CHARS.map((name) => (
+            <button
+              key={name}
+              onClick={() => onSelect(selected === name ? null : name)}
+              style={{
+                width: "100%",
+                aspectRatio: "1",
+                padding: 0,
+                borderRadius: "10px",
+                overflow: "hidden",
+                cursor: "pointer",
+                background: selected === name ? "rgba(115,87,255,0.2)" : "rgba(255,255,255,0.04)",
+                border: selected === name ? "2px solid #7357FF" : "2px solid rgba(255,255,255,0.08)",
+                transition: "all 0.15s",
+              }}
+            >
+              <img
+                src={`/assets/chars/${name}.png`}
+                alt={name}
+                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+              />
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            width: "100%",
+            marginTop: "16px",
+            padding: "10px",
+            borderRadius: "10px",
+            border: "none",
+            background: "#3F8487",
+            color: "#fff",
+            fontSize: "14px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Help() {
   const [mode, setMode] = useState("get");
 
@@ -1723,7 +1827,13 @@ export default function Help() {
   const [requestError, setRequestError] = useState("");
   const [responders, setResponders] = useState([]);
   const [popupMarker, setPopupMarker] = useState(null);
-  const [selectedChar, setSelectedChar] = useState(null);
+  const [selectedChar, setSelectedChar] = useState(() => {
+    try {
+      return localStorage.getItem("hp_selected_char") || null;
+    } catch {
+      return null;
+    }
+  });
   const [mapStyleIndex, setMapStyleIndex] = useState(0);
   const [styleOpen, setStyleOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -1731,6 +1841,18 @@ export default function Help() {
   const [myRequests, setMyRequests] = useState([]);
   const [myRequestsLoading, setMyRequestsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(null);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
+
+  // Persist avatar selection to localStorage
+  useEffect(() => {
+    try {
+      if (selectedChar) {
+        localStorage.setItem("hp_selected_char", selectedChar);
+      } else {
+        localStorage.removeItem("hp_selected_char");
+      }
+    } catch {}
+  }, [selectedChar]);
 
   const [openRequests, setOpenRequests] = useState(new Map());
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -4076,11 +4198,38 @@ export default function Help() {
                   )}
                 </div>
                 {myRequestsLoading && myRequests.length === 0 ? (
-                  <p
-                    style={{ fontSize: "12px", color: "rgba(242,236,220,0.3)" }}
-                  >
-                    Loading...
-                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} style={{
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.05)",
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                          <div style={{
+                            width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
+                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                            backgroundSize: "200px 100%",
+                            animation: "hp-shimmer 1.6s ease-in-out infinite"
+                          }} />
+                          <div style={{
+                            width: "80px", height: "10px", borderRadius: "3px",
+                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                            backgroundSize: "200px 100%",
+                            animation: "hp-shimmer 1.6s ease-in-out infinite"
+                          }} />
+                        </div>
+                        <div style={{
+                          width: "50px", height: "8px", borderRadius: "3px",
+                          background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
+                          backgroundSize: "200px 100%",
+                          animation: "hp-shimmer 1.6s ease-in-out infinite"
+                        }} />
+                      </div>
+                    ))}
+                  </div>
                 ) : myRequests.length === 0 ? (
                   <p
                     style={{ fontSize: "12px", color: "rgba(242,236,220,0.3)" }}
@@ -4894,55 +5043,32 @@ export default function Help() {
                       marginBottom: "6px",
                     }}
                   >
-                    Map avatar{" "}
-                    <span
-                      style={{
-                        fontWeight: 400,
-                        color: "rgba(242,236,220,0.2)",
-                      }}
-                    >
-                      · tap to override auto-pick
-                    </span>
+                    Map avatar
                   </div>
-                  <div
-                    style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarModal(true)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      cursor: "pointer",
+                      width: "100%",
+                    }}
                   >
-                    {CHARS.default.map((name) => (
-                      <button
-                        key={name}
-                        onClick={() =>
-                          setSelectedChar((c) => (c === name ? null : name))
-                        }
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          padding: 0,
-                          borderRadius: "8px",
-                          overflow: "hidden",
-                          cursor: "pointer",
-                          background:
-                            myChar === name
-                              ? "rgba(115,87,255,0.15)"
-                              : "rgba(255,255,255,0.03)",
-                          border:
-                            myChar === name
-                              ? "2px solid #7357FF"
-                              : "2px solid rgba(255,255,255,0.06)",
-                        }}
-                      >
-                        <img
-                          src={`/assets/chars/${name}.png`}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "contain",
-                            display: "block",
-                          }}
-                          alt=""
-                        />
-                      </button>
-                    ))}
-                  </div>
+                    <img
+                      src={`/assets/chars/${myChar}.png`}
+                      alt=""
+                      style={{ width: "32px", height: "32px", objectFit: "contain" }}
+                    />
+                    <span style={{ fontSize: "12px", color: "rgba(242,236,220,0.6)" }}>
+                      {selectedChar ? "Change avatar" : "Auto-pick · tap to choose"}
+                    </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -4953,6 +5079,13 @@ export default function Help() {
           open={showOnboarding}
           onClose={() => setShowOnboarding(false)}
           onConnectWallet={() => promptWalletConnection()}
+        />
+
+        <AvatarSelectionModal
+          open={showAvatarModal}
+          onClose={() => setShowAvatarModal(false)}
+          selected={selectedChar}
+          onSelect={setSelectedChar}
         />
 
         {!location && (
