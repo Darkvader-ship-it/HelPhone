@@ -172,6 +172,54 @@ app.post('/zk/prove', async (req, res) => {
   }
 })
 
+// ── Ranking API ─────────────────────────────────────────────────
+// Issue #151: Expose ranking data through the server so period filtering
+// can be applied. Currently the contract returns all-time rankings only;
+// when the contract adds per-period data, the server can pass the period
+// through to the contract call.
+const RANKING_CACHE_TTL = 30_000
+let _rankingCache = null
+let _rankingCacheTime = 0
+
+async function fetchRankingFromContract() {
+  const now = Date.now()
+  if (_rankingCache && now - _rankingCacheTime < RANKING_CACHE_TTL) {
+    return _rankingCache
+  }
+  const { Contract, TransactionBuilder, Operation, rpc, Networks, Keypair, Account, BASE_FEE, scValToNative } = await import('@stellar/stellar-sdk')
+  const serverRpc = new rpc.Server(RPC_URL, { allowHttp: RPC_URL.startsWith('http://') })
+  const sourceAddress = Keypair.random().publicKey()
+  const source = new Account(sourceAddress, '0')
+  const sorobanContract = new Contract(CONTRACT_ID)
+  const tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+    .addOperation(sorobanContract.call('get_ranking'))
+    .setTimeout(30)
+    .build()
+  const sim = await serverRpc.simulateTransaction(tx)
+  if (!sim.result) return []
+  const raw = scValToNative(sim.result.retval)
+  const entries = Array.isArray(raw) ? raw : []
+  _rankingCache = entries
+  _rankingCacheTime = now
+  return entries
+}
+
+app.get('/api/ranking', async (req, res) => {
+  try {
+    const { period = 'All Time', limit = '50' } = req.query
+    const maxLimit = Math.min(Math.max(1, parseInt(limit, 10) || 50), 200)
+    const entries = await fetchRankingFromContract()
+    const sorted = entries
+      .filter(e => e && typeof e.responder === 'string' && Number.isFinite(e.total_arrivals))
+      .sort((a, b) => b.total_arrivals - a.total_arrivals)
+      .slice(0, maxLimit)
+    res.json({ period, entries: sorted })
+  } catch (err) {
+    console.error('[ranking] Error:', err.message || err)
+    res.status(500).json({ error: 'Failed to fetch ranking' })
+  }
+})
+
 app.listen(PORT, () => {
   console.log(`ZK Prover on http://localhost:${PORT}`)
   ensureProver().catch(err => console.error('[prover] Init failed:', err))

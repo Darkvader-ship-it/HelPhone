@@ -6,6 +6,56 @@ const PERIODS = Object.freeze(['This Week', 'This Month', 'All Time'])
 
 const MEDALS = Object.freeze(['🥇', '🥈', '🥉'])
 
+const SKELETON_KEYFRAMES = `
+@keyframes hp-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+`
+
+function SkeletonRow() {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '48px 1fr 100px',
+      padding: '16px 20px',
+      borderBottom: '1px solid #f0e8d8',
+      alignItems: 'center',
+      background: '#fff'
+    }}>
+      <div style={{
+        width: '24px', height: '18px', borderRadius: '4px',
+        background: 'linear-gradient(90deg, #eee 0px, #e0e0e0 40px, #eee 80px)',
+        backgroundSize: '200px 100%',
+        animation: 'hp-shimmer 1.6s ease-in-out infinite'
+      }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{
+          width: '36px', height: '36px', borderRadius: '50%',
+          background: 'linear-gradient(90deg, #eee 0px, #e0e0e0 40px, #eee 80px)',
+          backgroundSize: '200px 100%',
+          animation: 'hp-shimmer 1.6s ease-in-out infinite',
+          flexShrink: 0
+        }} />
+        <div style={{
+          width: '100px', height: '14px', borderRadius: '4px',
+          background: 'linear-gradient(90deg, #eee 0px, #e0e0e0 40px, #eee 80px)',
+          backgroundSize: '200px 100%',
+          animation: 'hp-shimmer 1.6s ease-in-out infinite'
+        }} />
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          display: 'inline-block', width: '40px', height: '24px', borderRadius: '12px',
+          background: 'linear-gradient(90deg, #eee 0px, #e0e0e0 40px, #eee 80px)',
+          backgroundSize: '200px 100%',
+          animation: 'hp-shimmer 1.6s ease-in-out infinite'
+        }} />
+      </div>
+    </div>
+  )
+}
+
 export default function Ranking() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,7 +66,7 @@ export default function Ranking() {
     async function load() {
       setLoading(true)
       try {
-        const entries = await getRanking()
+        const entries = await getRanking(50, period)
         if (ignore) return
         const valid = Array.isArray(entries)
           ? entries.filter(
@@ -109,7 +159,53 @@ export default function Ranking() {
 
         {/* Table */}
         {loading ? (
-          <p style={{ color: '#a2a586', fontSize: '15px' }}>Loading…</p>
+          <div style={{
+            background: '#fff',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 24px rgba(35,75,78,0.08)'
+          }}>
+            <style>{SKELETON_KEYFRAMES}</style>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '48px 1fr 100px',
+              padding: '14px 20px',
+              borderBottom: '1px solid #e8e0d0',
+              fontSize: '11px',
+              letterSpacing: '1.5px',
+              fontWeight: '600',
+              color: '#a2a586'
+            }}>
+              <span>#</span>
+              <span>RESPONDER</span>
+              <span style={{ textAlign: 'center' }}>ARRIVALS</span>
+            </div>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <SkeletonRow key={i} />
+            ))}
+          </div>
+        ) : rows.length === 0 ? (
+          <div style={{
+            background: '#fff',
+            borderRadius: '16px',
+            padding: '48px 24px',
+            textAlign: 'center',
+            boxShadow: '0 4px 24px rgba(35,75,78,0.08)'
+          }}>
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none" style={{ margin: '0 auto 16px' }}>
+              <circle cx="32" cy="32" r="30" stroke="#ECE0CC" strokeWidth="2" />
+              <circle cx="22" cy="26" r="5" fill="#3F8487" opacity="0.3" />
+              <circle cx="42" cy="26" r="5" fill="#3F8487" opacity="0.3" />
+              <circle cx="32" cy="40" r="5" fill="#3F8487" opacity="0.3" />
+              <path d="M22 26L32 40L42 26" stroke="#3F8487" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.4" />
+            </svg>
+            <p style={{ fontSize: '15px', fontWeight: '600', color: '#234B4E', margin: '0 0 6px' }}>
+              No responders yet
+            </p>
+            <p style={{ fontSize: '13px', color: '#a2a586', margin: 0 }}>
+              When someone responds to an emergency, they'll appear here.
+            </p>
+          </div>
         ) : (
           <div style={{
             background: '#fff',

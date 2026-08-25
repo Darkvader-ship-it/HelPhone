@@ -334,7 +334,7 @@ export async function getResponderCount(requestId) {
   return scValToNative(sim.result.retval)
 }
 
-export async function getRanking(limit = 50) {
+export async function getRanking(limit = 50, period = 'All Time') {
   const sim = await simulateRead(
     contract.call('get_ranking')
   )
