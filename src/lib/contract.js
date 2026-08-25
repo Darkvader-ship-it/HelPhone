@@ -463,7 +463,12 @@ function buildContractError(rawError, operation) {
 }
 
 async function sendWrite(rawTx, wallet, operation = '') {
-  const sim = await server.simulateTransaction(rawTx)
+  // Simulation and submission are the two network round-trips congestion
+  // actually drops; signing is local (wallet), so it's left out of retry.
+  const sim = await withRetry(
+    () => server.simulateTransaction(rawTx),
+    { label: `Simulating ${operation || 'transaction'}` }
+  )
   if (sim.error) {
     throw buildContractError(sim.error, operation)
   }
@@ -474,7 +479,10 @@ async function sendWrite(rawTx, wallet, operation = '') {
     'Signed Stellar transaction XDR'
   )
   const signedTx = new Transaction(signedTxXdr, NETWORK)
-  const response = await server.sendTransaction(signedTx)
+  const response = await withRetry(
+    () => server.sendTransaction(signedTx),
+    { label: `Submitting ${operation || 'transaction'}` }
+  )
 
   if (response.status === 'ERROR') {
     throw new Error(response.errorResult?.result?.code || 'Transaction error')
