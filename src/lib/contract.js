@@ -18,14 +18,64 @@ const DEFAULT_CONTRACT_ID = assertValidContractId(
   'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY',
   'DEFAULT_CONTRACT_ID'
 )
-const CONTRACT_ID = assertValidContractId(
-  import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
-  'CONTRACT_ID'
-)
-const RPC_URL = 'https://soroban-testnet.stellar.org'
+
+const ACTIVE_NETWORK_STORAGE_KEY = 'helphone:active-network'
 const DEFAULT_FRIENDBOT_URL = 'https://friendbot.stellar.org'
-const FRIENDBOT_URL = import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL
-const NETWORK = Networks.TESTNET
+
+export const HELPHONE_NETWORKS = {
+  testnet: {
+    label: 'Testnet',
+    networkPassphrase: Networks.TESTNET,
+    rpcUrl: import.meta.env?.VITE_STELLAR_TESTNET_RPC_URL || 'https://soroban-testnet.stellar.org',
+    contractId: import.meta.env?.VITE_HELPHONE_TESTNET_CONTRACT_ID || import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
+    friendbotUrl: import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL,
+  },
+  futurenet: {
+    label: 'Futurenet',
+    networkPassphrase: Networks.FUTURENET,
+    rpcUrl: import.meta.env?.VITE_STELLAR_FUTURENET_RPC_URL || 'https://rpc-futurenet.stellar.org',
+    contractId: import.meta.env?.VITE_HELPHONE_FUTURENET_CONTRACT_ID || DEFAULT_CONTRACT_ID,
+    friendbotUrl: import.meta.env?.VITE_FUTURENET_FRIENDBOT_URL || '',
+  },
+  mainnet: {
+    label: 'Mainnet',
+    networkPassphrase: Networks.PUBLIC,
+    rpcUrl: import.meta.env?.VITE_STELLAR_MAINNET_RPC_URL || 'https://mainnet.sorobanrpc.com',
+    contractId: import.meta.env?.VITE_HELPHONE_MAINNET_CONTRACT_ID || import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
+    friendbotUrl: '',
+  },
+}
+
+function normalizeNetworkName(name) {
+  return Object.prototype.hasOwnProperty.call(HELPHONE_NETWORKS, name) ? name : 'testnet'
+}
+
+export function getActiveNetworkName() {
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage?.getItem(ACTIVE_NETWORK_STORAGE_KEY)
+    if (stored) return normalizeNetworkName(stored)
+  }
+  return normalizeNetworkName(import.meta.env?.VITE_STELLAR_NETWORK || 'testnet')
+}
+
+export function setActiveNetworkName(name) {
+  const normalized = normalizeNetworkName(name)
+  if (typeof window !== 'undefined') {
+    window.localStorage?.setItem(ACTIVE_NETWORK_STORAGE_KEY, normalized)
+  }
+  return normalized
+}
+
+export function getActiveNetworkConfig() {
+  const name = getActiveNetworkName()
+  return { name, ...HELPHONE_NETWORKS[name] }
+}
+
+const ACTIVE_NETWORK = getActiveNetworkConfig()
+const CONTRACT_ID = assertValidContractId(ACTIVE_NETWORK.contractId, 'CONTRACT_ID')
+const RPC_URL = ACTIVE_NETWORK.rpcUrl
+const FRIENDBOT_URL = ACTIVE_NETWORK.friendbotUrl
+const NETWORK = ACTIVE_NETWORK.networkPassphrase
 
 const server = new rpc.Server(RPC_URL, { timeout: 30_000 })
 const contract = new Contract(CONTRACT_ID)
@@ -368,6 +418,9 @@ function friendbotUrl(address) {
 export async function ensureAccountFunded(address) {
   if (!address) throw new Error('Wallet address is not available yet')
   if (await checkAccount(address)) return true
+  if (!FRIENDBOT_URL) {
+    throw new Error(`${ACTIVE_NETWORK.label} account is not funded. Fund it before submitting transactions.`)
+  }
 
   const res = await fetch(friendbotUrl(address))
   if (!res.ok) {
