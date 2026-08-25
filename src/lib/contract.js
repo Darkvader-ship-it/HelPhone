@@ -171,14 +171,55 @@ function mapResponder(raw) {
   }
 }
 
+// ── Retry with exponential backoff (issue #178) ─────────────────
+// Network congestion drops RPC calls; retrying blindly on contract-logic
+// errors (AlreadyClaimed, WrongStatus, etc.) would just waste time since
+// those can never succeed on retry, so only transient/network-shaped
+// failures are retried. `err.contractCode` is set by buildContractError
+// once a response has actually been parsed as an on-chain error — that
+// is always non-retryable.
+const RETRY_MAX_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 1000
+
+function isRetryableError(err) {
+  if (err?.contractCode != null) return false
+  const msg = String(err?.message || err || '')
+  return /fetch|network|timeout|ECONNRESET|ETIMEDOUT|502|503|504|Failed to fetch/i.test(msg)
+}
+
+/** Runs `fn` with exponential backoff (1s, 2s, 4s, ...) on retryable
+ *  failures. Aborts and rethrows (with a clearer message) once
+ *  `maxAttempts` is exhausted — callers already surface thrown errors to
+ *  the user (see e.g. Help.jsx's `alert(err.message)` pattern), so this
+ *  is also how the user gets notified. */
+async function withRetry(fn, { label = 'request', maxAttempts = RETRY_MAX_ATTEMPTS } = {}) {
+  let lastErr
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!isRetryableError(err) || attempt === maxAttempts - 1) break
+      const delayMs = RETRY_BASE_DELAY_MS * 2 ** attempt
+      console.warn(`[retry] ${label} failed (attempt ${attempt + 1}/${maxAttempts}); retrying in ${delayMs}ms`, err?.message || err)
+      await new Promise(r => setTimeout(r, delayMs))
+    }
+  }
+  if (isRetryableError(lastErr)) {
+    throw new Error(`${label} failed after ${maxAttempts} attempts due to network congestion. Please try again.`)
+  }
+  throw lastErr
+}
+
 // ── Read helper ─────────────────────────────────────────────────
 async function simulateRead(call) {
-  const tx = new TransactionBuilder(_readSource(), { fee: BASE_FEE, networkPassphrase: NETWORK })
-    .addOperation(call)
-    .setTimeout(30)
-    .build()
-  const sim = await server.simulateTransaction(tx)
-  return sim
+  return withRetry(async () => {
+    const tx = new TransactionBuilder(_readSource(), { fee: BASE_FEE, networkPassphrase: NETWORK })
+      .addOperation(call)
+      .setTimeout(30)
+      .build()
+    return await server.simulateTransaction(tx)
+  }, { label: 'Reading from contract' })
 }
 
 async function resolveWalletAddress(wallet, fallback = '') {
@@ -262,6 +303,39 @@ export async function getExpertVerifications(walletAddress, limit = 10) {
   )
   if (!sim.result) return []
   return scValToNative(sim.result.retval) || []
+}
+
+// ── Contract event stream (issue #177) ─────────────────────────
+// Server-Sent Events from the local prover/events server, which itself
+// polls Soroban RPC once and fans out to every connected browser (see
+// server/index.js). Falls back gracefully: callers keep their own
+// interval-based refresh as a backstop and just refresh sooner/less often
+// depending on whether this connects.
+const EVENTS_URL = import.meta.env?.VITE_EVENTS_URL || 'http://localhost:3001/events/stream'
+
+/** Subscribe to contract lifecycle events. `onEvent` is called with
+ *  `{ topic, ledger, id }` for each event. Returns an unsubscribe function.
+ *  Never throws — a construction failure (e.g. no EventSource support)
+ *  just means the caller's polling fallback keeps doing all the work. */
+export function subscribeToContractEvents(onEvent) {
+  let es
+  try {
+    es = new EventSource(EVENTS_URL)
+  } catch {
+    return () => {}
+  }
+  es.onmessage = (msg) => {
+    try {
+      onEvent(JSON.parse(msg.data))
+    } catch {
+      // malformed event payload — ignore, don't crash the subscriber
+    }
+  }
+  es.onerror = () => {
+    // EventSource auto-reconnects on transient errors; nothing to do here.
+    // The caller's polling fallback continues covering us regardless.
+  }
+  return () => es.close()
 }
 
 export async function checkAccount(address) {
@@ -408,7 +482,12 @@ function buildContractError(rawError, operation) {
 }
 
 async function sendWrite(rawTx, wallet, operation = '') {
-  const sim = await server.simulateTransaction(rawTx)
+  // Simulation and submission are the two network round-trips congestion
+  // actually drops; signing is local (wallet), so it's left out of retry.
+  const sim = await withRetry(
+    () => server.simulateTransaction(rawTx),
+    { label: `Simulating ${operation || 'transaction'}` }
+  )
   if (sim.error) {
     throw buildContractError(sim.error, operation)
   }
@@ -419,7 +498,10 @@ async function sendWrite(rawTx, wallet, operation = '') {
     'Signed Stellar transaction XDR'
   )
   const signedTx = new Transaction(signedTxXdr, NETWORK)
-  const response = await server.sendTransaction(signedTx)
+  const response = await withRetry(
+    () => server.sendTransaction(signedTx),
+    { label: `Submitting ${operation || 'transaction'}` }
+  )
 
   if (response.status === 'ERROR') {
     throw new Error(response.errorResult?.result?.code || 'Transaction error')

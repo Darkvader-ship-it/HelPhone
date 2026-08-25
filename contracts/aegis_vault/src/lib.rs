@@ -42,6 +42,14 @@ pub enum VaultError {
     Overflow = 8,
     NotAuthorized = 9,
     InvalidPayout = 10,
+    // AdminNotSet(11): upgrade()'s admin-unset guard; distinct from
+    // NotAuthorized since it fires before there's anyone to check auth
+    // against. The old `Unauthorized` variant this branch briefly had
+    // was dead code — upgrade() relies on admin.require_auth() trapping,
+    // it never returned that error — so it's dropped in favor of the
+    // NotAuthorized variant set_payout_amount() already uses for the
+    // same "caller isn't admin" case.
+    AdminNotSet = 11,
 }
 
 #[contractevent(topics = ["claimed"], data_format = "map")]
@@ -165,7 +173,8 @@ fn call_verify_proof(
 
 #[contractimpl]
 impl AegisVault {
-    /// Deploy: set verifier contract address and reward token.
+    /// Deploy: set verifier contract address, reward token, and the admin
+    /// authorized to perform future upgrades (issue #176).
     pub fn __constructor(
         env: Env,
         verifier: Address,
@@ -177,6 +186,25 @@ impl AegisVault {
         env.storage().instance().set(&key_admin(), &admin);
         env.storage().instance().set(&key_payout(), &DEFAULT_PAYOUT_STROOP);
         Ok(())
+    }
+
+    /// Upgrade the contract's executable WASM to `new_wasm_hash`. Only the
+    /// admin set at deploy time may call this. Soroban's upgrade model
+    /// swaps the code while preserving existing instance/persistent
+    /// storage, so campaign balances and spent nullifiers survive the
+    /// upgrade untouched — no state migration needed.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        let admin: Address = env
+            .storage().instance().get(&key_admin())
+            .ok_or(VaultError::AdminNotSet)?;
+        admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Returns the current admin address, if set.
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&key_admin())
     }
 
     /// Update the aid payout amount in token base units. Admin authorization is required.
@@ -346,31 +374,4 @@ impl AegisVault {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-
-    #[test]
-    fn test_vault_error_overflow() {
-        let err = VaultError::Overflow;
-        assert_eq!(err as u32, 8);
-    }
-
-    #[test]
-    fn admin_can_update_payout_amount() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let verifier = Address::generate(&env);
-        let token = Address::generate(&env);
-        let admin = Address::generate(&env);
-        let contract_id = env.register(AegisVault, (&verifier, &token, &admin));
-        let client = AegisVaultClient::new(&env, &contract_id);
-
-        assert_eq!(client.payout_amount(), DEFAULT_PAYOUT_STROOP);
-
-        client.set_payout_amount(&admin, &75_000_000);
-
-        assert_eq!(client.payout_amount(), 75_000_000);
-    }
-}
+mod test;

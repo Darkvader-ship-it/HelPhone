@@ -33,6 +33,7 @@ import {
   ensureAccountFunded,
   updateLocation,
   recordExpertVerification,
+  subscribeToContractEvents,
 } from "../lib/contract";
 import {
   buildLocationProofZone,
@@ -1948,9 +1949,16 @@ export default function Help() {
     }
 
     load();
+    // Issue #177: also react to contract events (pushed via SSE) for
+    // near-immediate updates on top of the resilient backoff loop above,
+    // which remains as the backstop if the event stream is unavailable.
+    const unsubscribe = subscribeToContractEvents((event) => {
+      if (["RqCreated", "Resolved", "Cancelled"].includes(event.topic)) load();
+    });
     return () => {
       token.cancel();
       if (timer) clearTimeout(timer);
+      unsubscribe();
     };
   }, [mode]);
 
@@ -2639,10 +2647,18 @@ export default function Help() {
     }
 
     poll();
-    const interval = setInterval(poll, 3000);
+    // Issue #177: RqAcptd/LocUpd/Arrived events for THIS request trigger
+    // an immediate re-poll; the interval below is now just a slow
+    // backstop (upstream had this at 3000ms — events do the real-time
+    // work now, so it's slowed to 15000ms rather than dropped entirely).
+    const unsubscribe = subscribeToContractEvents((event) => {
+      if (["RqAcptd", "LocUpd", "Arrived"].includes(event.topic)) poll();
+    });
+    const interval = setInterval(poll, 15000);
     return () => {
       token.cancel();
       clearInterval(interval);
+      unsubscribe();
     };
   }, [requestId]);
 
