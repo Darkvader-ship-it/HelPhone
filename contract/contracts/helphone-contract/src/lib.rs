@@ -18,6 +18,9 @@ pub enum DataKey {
     RequestCount,
     ResponderCount(u64),
     ActiveRequestIds,
+    // Issue #179: position of `id` within ActiveRequestIds, so removal
+    // can swap-remove in O(1) instead of rebuilding the whole list.
+    ActiveIndex(u64),
     RankingMap,
     ExpertVerifications(Address),
 }
@@ -422,34 +425,73 @@ impl HelPhone {
         env.storage().persistent().set(&key, &val);
     }
 
+    // Issue #179: `get_active_requests` itself already reads this list
+    // directly (O(1)) rather than scanning all request IDs — the actual
+    // linear-scan cost lived here, on the write path: every removal used
+    // to rebuild the entire Vec by filtering (O(n)), and eviction shifted
+    // every remaining element down by one (also O(n)). Both are now O(1)
+    // swap-remove, tracked via the ActiveIndex side-map. Active-set order
+    // is not meaningful to callers (it's a membership set, not a queue),
+    // so swapping elements around on removal/eviction is safe.
+
     fn active_push(env: &Env, id: u64) {
-        let key = DataKey::ActiveRequestIds;
+        let list_key = DataKey::ActiveRequestIds;
         let mut ids: Vec<u64> = env
             .storage()
             .persistent()
-            .get(&key)
+            .get(&list_key)
             .unwrap_or(Vec::new(env));
+
         if ids.len() >= MAX_ACTIVE_KEYS as u32 {
-            ids.remove(0);
+            // Evict the current slot 0 in O(1): move the last element
+            // into slot 0 (updating its recorded index), then drop the
+            // now-duplicated last slot. Which id gets evicted is
+            // unspecified beyond "some existing entry" — callers only
+            // rely on the set staying bounded, not on eviction order.
+            if let Some(evicted_id) = ids.get(0) {
+                env.storage().persistent().remove(&DataKey::ActiveIndex(evicted_id));
+            }
+            let last_pos = ids.len() - 1;
+            if last_pos > 0 {
+                if let Some(moved_id) = ids.get(last_pos) {
+                    ids.set(0, moved_id);
+                    env.storage().persistent().set(&DataKey::ActiveIndex(moved_id), &0u32);
+                }
+            }
+            ids.pop_back();
         }
+
+        let new_index = ids.len();
         ids.push_back(id);
-        env.storage().persistent().set(&key, &ids);
+        env.storage().persistent().set(&DataKey::ActiveIndex(id), &new_index);
+        env.storage().persistent().set(&list_key, &ids);
     }
 
     fn active_remove(env: &Env, id: u64) {
-        let key = DataKey::ActiveRequestIds;
-        let ids: Vec<u64> = env
+        let index_key = DataKey::ActiveIndex(id);
+        let index: u32 = match env.storage().persistent().get(&index_key) {
+            Some(i) => i,
+            None => return, // not active (already resolved/cancelled) — nothing to do
+        };
+
+        let list_key = DataKey::ActiveRequestIds;
+        let mut ids: Vec<u64> = env
             .storage()
             .persistent()
-            .get(&key)
+            .get(&list_key)
             .unwrap_or(Vec::new(env));
-        let mut new_ids: Vec<u64> = Vec::new(env);
-        for existing in ids.iter() {
-            if existing != id {
-                new_ids.push_back(existing);
+
+        let last_pos = ids.len() - 1;
+        if index != last_pos {
+            if let Some(last_id) = ids.get(last_pos) {
+                ids.set(index, last_id);
+                env.storage().persistent().set(&DataKey::ActiveIndex(last_id), &index);
             }
         }
-        env.storage().persistent().set(&key, &new_ids);
+        ids.pop_back();
+
+        env.storage().persistent().remove(&index_key);
+        env.storage().persistent().set(&list_key, &ids);
     }
 
     fn ranking_increment(env: &Env, responder: &Address) {
