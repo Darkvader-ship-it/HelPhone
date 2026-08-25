@@ -55,3 +55,28 @@ fn upgrade_requires_admin_authorization() {
     let result = client.try_upgrade(&bogus_hash);
     assert!(result.is_err(), "upgrade must fail without the admin's authorization");
 }
+
+// The two tests below came from upstream's independent "configurable
+// payout" feature, which added the same admin field to __constructor at
+// the same time this branch did (for upgrade authorization instead).
+// Moved here, onto the shared `setup()` helper, when merging the two.
+
+#[test]
+fn test_vault_error_overflow() {
+    let err = VaultError::Overflow;
+    assert_eq!(err as u32, 8);
+}
+
+#[test]
+fn admin_can_update_payout_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = setup(&env);
+
+    assert_eq!(client.payout_amount(), DEFAULT_PAYOUT_STROOP);
+
+    client.set_payout_amount(&admin, &75_000_000);
+
+    assert_eq!(client.payout_amount(), 75_000_000);
+}

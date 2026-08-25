@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getRanking } from '../lib/contract'
 
-const PERIODS = ['This Week', 'This Month', 'All Time']
+const PERIODS = Object.freeze(['This Week', 'This Month', 'All Time'])
 
-const MEDALS = ['🥇', '🥈', '🥉']
+const MEDALS = Object.freeze(['🥇', '🥈', '🥉'])
 
 export default function Ranking() {
   const [rows, setRows] = useState([])
@@ -12,20 +12,33 @@ export default function Ranking() {
   const [period, setPeriod] = useState('All Time')
 
   useEffect(() => {
+    let ignore = false
     async function load() {
       setLoading(true)
       try {
         const entries = await getRanking()
-        const sorted = entries
+        if (ignore) return
+        const valid = Array.isArray(entries)
+          ? entries.filter(
+              (e) =>
+                e &&
+                typeof e.responder === 'string' &&
+                Number.isFinite(e.total_arrivals),
+            )
+          : []
+        const sorted = valid
           .sort((a, b) => b.total_arrivals - a.total_arrivals)
           .slice(0, 20)
         setRows(sorted)
       } catch {
-        setRows([])
+        if (!ignore) setRows([])
       }
-      setLoading(false)
+      if (!ignore) setLoading(false)
     }
     load()
+    return () => {
+      ignore = true
+    }
   }, [period])
 
   return (
@@ -73,7 +86,7 @@ export default function Ranking() {
 
         {/* Period tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-          {PERIODS.map(p => (
+          {Array.isArray(PERIODS) && PERIODS.map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -136,9 +149,9 @@ export default function Ranking() {
                 <span style={{
                   fontWeight: '700',
                   fontSize: '18px',
-                  color: i < 3 ? '#3F8487' : '#a2a586'
+                  color: i < MEDALS.length ? '#3F8487' : '#a2a586'
                 }}>
-                  {i < 3 ? MEDALS[i] : `${i + 1}`}
+                  {i < MEDALS.length ? MEDALS[i] : `${i + 1}`}
                 </span>
 
                 {/* Address */}

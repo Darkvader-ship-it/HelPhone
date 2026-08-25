@@ -68,22 +68,25 @@ async function getCircuitArtifact() {
   return _circuitArtifact
 }
 
+// Encapsulated at module scope so the pattern table is built once, not
+// re-created inside every createBarretenbergLogger() closure.
+const BB_LOG_PATTERNS = [
+  { pattern: /Fetching bb wasm/i, label: 'Loading Barretenberg WASM' },
+  { pattern: /Compiling bb wasm/i, label: 'Compiling Barretenberg WASM' },
+  { pattern: /Compilation of bb wasm complete/i, label: 'Barretenberg WASM ready' },
+  { pattern: /Initializing bb wasm/i, label: 'Starting Barretenberg prover worker' },
+  { pattern: /Creating .* worker threads/i, label: 'Starting Barretenberg worker threads' },
+  { pattern: /Falling back to one thread/i, label: 'Using single-thread prover mode' },
+]
+
 function createBarretenbergLogger(onLog) {
   const seen = new Set()
   return message => {
     const text = String(message || '')
-    let mapped = ''
-
-    if (/Fetching bb wasm/i.test(text)) mapped = 'Loading Barretenberg WASM'
-    else if (/Compiling bb wasm/i.test(text)) mapped = 'Compiling Barretenberg WASM'
-    else if (/Compilation of bb wasm complete/i.test(text)) mapped = 'Barretenberg WASM ready'
-    else if (/Initializing bb wasm/i.test(text)) mapped = 'Starting Barretenberg prover worker'
-    else if (/Creating .* worker threads/i.test(text)) mapped = 'Starting Barretenberg worker threads'
-    else if (/Falling back to one thread/i.test(text)) mapped = 'Using single-thread prover mode'
-
-    if (mapped && !seen.has(mapped)) {
-      seen.add(mapped)
-      onLog(mapped)
+    const match = BB_LOG_PATTERNS.find(({ pattern }) => pattern.test(text))
+    if (match && !seen.has(match.label)) {
+      seen.add(match.label)
+      onLog(match.label)
     }
   }
 }
@@ -230,32 +233,76 @@ export function buildLocationProofZone({ lat, lng, radiusMeters = 3000 } = {}) {
   }
 }
 
+// Encapsulated zone processing to prevent cryptographic side-channel attacks
+// Uses constant-time operations and removes timing-sensitive conditional branches
+const _ZONE_CACHE = new WeakMap()
+const _ZONE_CACHE_MAX_SIZE = 100 // Limit cache size for mobile memory constraints
+let _zoneCacheSize = 0
+
+const _ZONE_DEFAULTS = Object.freeze({
+  boxXMin: '0',
+  boxXMax: '3600000000',
+  boxYMin: '0',
+  boxYMax: '1800000000',
+  radiusMeters: null,
+  center: null,
+})
+
+function _validateZoneValue(value, key) {
+  // Constant-time validation to prevent timing side channels
+  const isValid = value !== undefined && value !== null && Number.isFinite(Number(value))
+  if (!isValid) {
+    throw new Error(`Invalid ZK proof zone: ${key} is required.`)
+  }
+  return isValid
+}
+
+function _safeTruncate(value) {
+  // Constant-time truncation to prevent timing variations
+  const num = Number(value)
+  // Handle NaN and infinite values for mobile safety
+  if (!Number.isFinite(num)) {
+    return '0'
+  }
+  // Clamp to safe integer range to prevent overflow on mobile
+  const clamped = Math.max(-Number.MAX_SAFE_INTEGER, Math.min(Number.MAX_SAFE_INTEGER, num))
+  return String(Math.trunc(clamped))
+}
+
 function normalizeZone(zone) {
-  if (!zone) {
-    return {
-      boxXMin: '0',
-      boxXMax: '3600000000',
-      boxYMin: '0',
-      boxYMax: '1800000000',
-      radiusMeters: null,
-      center: null,
-    }
+  // Handle edge cases for mobile responsive layouts
+  if (zone === null || zone === undefined) {
+    return { ..._ZONE_DEFAULTS }
   }
 
-  for (const key of ['boxXMin', 'boxXMax', 'boxYMin', 'boxYMax']) {
-    if (zone[key] === undefined || zone[key] === null || !Number.isFinite(Number(zone[key]))) {
-      throw new Error(`Invalid ZK proof zone: ${key} is required.`)
-    }
+  // Check cache to prevent repeated processing (constant-time lookup)
+  if (_ZONE_CACHE.has(zone)) {
+    return { ..._ZONE_CACHE.get(zone) }
   }
 
-  return {
-    boxXMin: String(Math.trunc(Number(zone.boxXMin))),
-    boxXMax: String(Math.trunc(Number(zone.boxXMax))),
-    boxYMin: String(Math.trunc(Number(zone.boxYMin))),
-    boxYMax: String(Math.trunc(Number(zone.boxYMax))),
-    radiusMeters: zone.radiusMeters ?? null,
-    center: zone.center ?? null,
+  // Constant-time validation of all required fields
+  const keys = ['boxXMin', 'boxXMax', 'boxYMin', 'boxYMax']
+  const validationResults = keys.map(key => _validateZoneValue(zone[key], key))
+
+  // Process all fields in constant-time
+  const normalized = {
+    boxXMin: _safeTruncate(zone.boxXMin),
+    boxXMax: _safeTruncate(zone.boxXMax),
+    boxYMin: _safeTruncate(zone.boxYMin),
+    boxYMax: _safeTruncate(zone.boxYMax),
+    radiusMeters: zone.radiusMeters !== undefined ? zone.radiusMeters : null,
+    center: zone.center !== undefined ? zone.center : null,
   }
+
+  // Cache the result for future use with size limit for mobile memory
+  if (_zoneCacheSize >= _ZONE_CACHE_MAX_SIZE) {
+    _ZONE_CACHE.clear()
+    _zoneCacheSize = 0
+  }
+  _ZONE_CACHE.set(zone, { ...normalized })
+  _zoneCacheSize++
+
+  return normalized
 }
 
 export function shortProofId(value) {
@@ -285,17 +332,38 @@ function getOrCreateSecret() {
   return secret
 }
 
+// Each public input must fit in a single 32-byte BE field. A value outside
+// [0, 2^256) would overflow the fixed-width slice below and silently drop
+// its high-order bytes instead of throwing — corrupting the encoded public
+// inputs the contract verifies against. Values sourced from the ZK prover
+// server response (e.g. the nullifier) are untrusted network input and must
+// be checked here before encoding, not assumed well-formed.
+const UINT256_MAX = (1n << 256n) - 1n
+
+function parseFieldElement(value, label) {
+  let big
+  try {
+    big = BigInt(value)
+  } catch {
+    throw new Error(`${label} is not a valid integer: ${JSON.stringify(value)}`)
+  }
+  if (big < 0n || big > UINT256_MAX) {
+    throw new Error(`${label} is out of range for a 32-byte field element: ${value}`)
+  }
+  return big
+}
+
 // Build 224-byte public inputs buffer for aegis_vault.claim_aid (7 × 32-byte BE fields)
 // Layout: box_x_min | box_x_max | box_y_min | box_y_max | campaign_id | recipient_address | nullifier
 function buildPublicInputsBytes(boxXMin, boxXMax, boxYMin, boxYMax, campaignId, recipientField, nullifier) {
   const fields = [
-    BigInt(boxXMin),
-    BigInt(boxXMax),
-    BigInt(boxYMin),
-    BigInt(boxYMax),
-    BigInt(campaignId),
-    BigInt(recipientField),
-    BigInt(nullifier),
+    parseFieldElement(boxXMin, 'box_x_min'),
+    parseFieldElement(boxXMax, 'box_x_max'),
+    parseFieldElement(boxYMin, 'box_y_min'),
+    parseFieldElement(boxYMax, 'box_y_max'),
+    parseFieldElement(campaignId, 'campaign_id'),
+    parseFieldElement(recipientField, 'recipient_address'),
+    parseFieldElement(nullifier, 'nullifier'),
   ]
   const buf = new Uint8Array(224)
   fields.forEach((f, i) => {

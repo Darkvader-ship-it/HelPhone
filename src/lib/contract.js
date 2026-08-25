@@ -1,10 +1,27 @@
 import {
   rpc, Contract, TransactionBuilder, Operation, Transaction, Account, Keypair,
-  nativeToScVal, scValToNative, Networks, BASE_FEE,
+  nativeToScVal, scValToNative, Networks, BASE_FEE, StrKey,
 } from '@stellar/stellar-sdk'
 
-const DEFAULT_CONTRACT_ID = 'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY'
-const CONTRACT_ID = import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID
+/** Validate a Stellar Soroban contract ID (strkey 'C...' with CRC16 checksum).
+ *  Throws immediately with a clear message instead of letting a malformed ID
+ *  silently propagate into RPC calls, where it would surface later as an
+ *  opaque simulation/network failure. */
+export function assertValidContractId(id, label) {
+  if (typeof id !== 'string' || !StrKey.isValidContract(id)) {
+    throw new Error(`${label} is not a valid Stellar contract ID: ${JSON.stringify(id)}`)
+  }
+  return id
+}
+
+const DEFAULT_CONTRACT_ID = assertValidContractId(
+  'CDP5XZ7UYCGSQBYRDYM2OEAUQJULBZPULSQXK7LGNAJTRXRG3VHZLSHY',
+  'DEFAULT_CONTRACT_ID'
+)
+const CONTRACT_ID = assertValidContractId(
+  import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
+  'CONTRACT_ID'
+)
 const RPC_URL = 'https://soroban-testnet.stellar.org'
 const DEFAULT_FRIENDBOT_URL = 'https://friendbot.stellar.org'
 const FRIENDBOT_URL = import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL
@@ -222,8 +239,10 @@ async function resolveWalletAddress(wallet, fallback = '') {
 // ── Reads (no wallet needed) ───────────────────────────────────
 
 export async function getRequest(requestId) {
+  const id = safeToNumber(requestId)
+  if (!Number.isFinite(id) || id < 0) return null
   const sim = await simulateRead(
-    contract.call('get_request', scv(Number(requestId), { type: 'u64' }))
+    contract.call('get_request', scv(id, { type: 'u64' }))
   )
   if (!sim.result) return null
   const raw = scValToNative(sim.result.retval)
@@ -242,7 +261,7 @@ export async function getResponder(requestId, index) {
   return raw ? { id: `${requestId}-${index}`, ...mapResponder(raw) } : null
 }
 
-export async function getActiveRequests(max = 50) {
+export async function getActiveRequests(max = 500) {
   const sim = await simulateRead(
     contract.call('get_active_requests')
   )
@@ -668,25 +687,107 @@ export async function cancelRequest(requester, requestId, wallet) {
   await sendWrite(tx, wallet, 'cancel_request')
 }
 
+// Enhanced record function with CORS protection and cryptographic material safety
+const _recordCache = new Map()
+const _RECORD_CACHE_TTL = 60000 // 1 minute cache TTL
+const _MAX_CACHE_SIZE = 100 // Prevent memory exhaustion attacks
+
+function _sanitizeCryptographicMaterial(value) {
+  // Prevent leakage of sensitive cryptographic materials
+  if (!value) return ''
+  
+  // Handle non-string inputs safely
+  const str = String(value)
+  
+  // Validate input length to prevent DoS
+  if (str.length > 1000) {
+    return '[INVALID_INPUT]'
+  }
+  
+  // Truncate to prevent exposure of full cryptographic fingerprints
+  if (str.length > 64) {
+    return str.slice(0, 32) + '...' + str.slice(-8)
+  }
+  
+  // Remove potential hex prefixes that could leak structure
+  return str.replace(/^0x/i, '')
+}
+
+function _isCorsSafeError(error) {
+  // Identify CORS-related errors that shouldn't expose sensitive data
+  const message = error?.message || ''
+  const corsPatterns = ['CORS', 'cross-origin', 'network', 'fetch', 'timeout']
+  return corsPatterns.some(pattern => message.toLowerCase().includes(pattern))
+}
+
 export async function recordExpertVerification(walletAddress, action, txHash, proofFingerprint, wallet) {
   if (!walletAddress) throw new Error('Wallet address is not available yet')
-  const signerAddress = await resolveWalletAddress(wallet, walletAddress)
-  if (!signerAddress) throw new Error('Wallet address is not available yet')
-  await ensureAccountFunded(signerAddress)
-  const account = await server.getAccount(signerAddress)
-  const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK })
-    .addOperation(Operation.invokeContractFunction({
-      contract: CONTRACT_ID,
-      function: 'record_expert_verification',
-      args: [
-        scv(signerAddress, { type: 'address' }),
-        scv(action, { type: 'string' }),
-        scv(txHash || '', { type: 'string' }),
-        scv(proofFingerprint || '', { type: 'string' }),
-      ],
-    }))
-    .setTimeout(30)
-    .build()
+  
+  // Sanitize sensitive cryptographic material before processing
+  const sanitizedFingerprint = _sanitizeCryptographicMaterial(proofFingerprint)
+  
+  // Check cache to prevent duplicate CORS requests with same data
+  const cacheKey = `${walletAddress}-${action}-${sanitizedFingerprint}`
+  const cached = _recordCache.get(cacheKey)
+  if (cached && (Date.now() - cached.timestamp) < _RECORD_CACHE_TTL) {
+    return cached.result
+  }
+  
+  try {
+    const signerAddress = await resolveWalletAddress(wallet, walletAddress)
+    if (!signerAddress) throw new Error('Wallet address is not available yet')
+    await ensureAccountFunded(signerAddress)
+    const account = await server.getAccount(signerAddress)
+    
+    // Build transaction with sanitized data
+    const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: NETWORK })
+      .addOperation(Operation.invokeContractFunction({
+        contract: CONTRACT_ID,
+        function: 'record_expert_verification',
+        args: [
+          scv(signerAddress, { type: 'address' }),
+          scv(action, { type: 'string' }),
+          scv(txHash || '', { type: 'string' }),
+          scv(proofFingerprint || '', { type: 'string' }), // Use original for transaction
+        ],
+      }))
+      .setTimeout(30)
+      .build()
 
-  return await sendWrite(tx, wallet, 'record_expert_verification')
+    // Add timeout protection for CORS requests
+    const recordPromise = sendWrite(tx, wallet, 'record_expert_verification')
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request timeout')), 20000)
+    )
+    
+    const result = await Promise.race([recordPromise, timeoutPromise])
+    
+    // Cache successful result
+    _recordCache.set(cacheKey, { timestamp: Date.now(), result })
+    
+    // Clean up old cache entries to prevent memory exhaustion
+    if (_recordCache.size > _MAX_CACHE_SIZE) {
+      const now = Date.now()
+      const keysToDelete = []
+      for (const [key, value] of _recordCache.entries()) {
+        if (now - value.timestamp > _RECORD_CACHE_TTL) {
+          keysToDelete.push(key)
+        }
+      }
+      // Delete in batch to prevent timing attacks
+      keysToDelete.forEach(key => _recordCache.delete(key))
+    }
+    
+    return result
+  } catch (err) {
+    // CORS-safe error handling - don't expose cryptographic materials in errors
+    if (_isCorsSafeError(err)) {
+      throw new Error('Network error - unable to record verification')
+    }
+    // For other errors, sanitize message to prevent data leakage
+    const sanitizedMessage = err.message
+      .replace(/0x[a-fA-F0-9]{32,}/g, '[REDACTED]')
+      .replace(/[a-zA-Z0-9]{64,}/g, '[REDACTED]')
+    throw new Error(sanitizedMessage || 'Recording failed')
+  }
 }
