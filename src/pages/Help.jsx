@@ -4,7 +4,7 @@ import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit/sdk'
 import { KitEventType } from '@creit-tech/stellar-wallets-kit/types'
 import Map, { Marker, Popup, Source, Layer, NavigationControl, useMap } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { getRequest, getActiveRequests, getResponder, getResponderCount, createRequest, acceptRequest, markArrived, resolveRequest, cancelRequest, getRanking, ensureAccountFunded, updateLocation, recordExpertVerification } from '../lib/contract'
+import { getRequest, getActiveRequests, getResponder, getResponderCount, createRequest, acceptRequest, markArrived, resolveRequest, cancelRequest, getRanking, ensureAccountFunded, updateLocation, recordExpertVerification, subscribeToContractEvents } from '../lib/contract'
 import { buildLocationProofZone, generateLocationProof, shortProofId } from '../lib/zk'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN
@@ -753,8 +753,17 @@ export default function Help() {
     }
 
     load()
-    const interval = setInterval(load, 5000)
-    return () => { mounted = false; clearInterval(interval) }
+    // Issue #177: react to contract events (pushed via SSE, see
+    // subscribeToContractEvents) instead of a tight poll. The interval
+    // below is now just a slow backstop in case the event stream is
+    // unavailable (server down, browser blocking EventSource, etc.) —
+    // events do the real-time work, polling just guarantees eventual
+    // consistency if they're missed.
+    const unsubscribe = subscribeToContractEvents((event) => {
+      if (['RqCreated', 'Resolved', 'Cancelled'].includes(event.topic)) load()
+    })
+    const interval = setInterval(load, 20000)
+    return () => { mounted = false; unsubscribe(); clearInterval(interval) }
   }, [mode])
 
   function requestLocation() {
@@ -1111,8 +1120,14 @@ export default function Help() {
     }
 
     poll()
-    const interval = setInterval(poll, 3000)
-    return () => { mounted = false; clearInterval(interval) }
+    // Issue #177: same event-driven pattern as the active-requests effect
+    // above — RqAcptd/LocUpd/Arrived events for THIS request trigger an
+    // immediate re-poll; the interval is a slow backstop only.
+    const unsubscribe = subscribeToContractEvents((event) => {
+      if (['RqAcptd', 'LocUpd', 'Arrived'].includes(event.topic)) poll()
+    })
+    const interval = setInterval(poll, 15000)
+    return () => { mounted = false; unsubscribe(); clearInterval(interval) }
   }, [requestId])
 
   useEffect(() => {
