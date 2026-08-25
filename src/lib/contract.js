@@ -245,6 +245,39 @@ export async function getExpertVerifications(walletAddress, limit = 10) {
   return scValToNative(sim.result.retval) || []
 }
 
+// ── Contract event stream (issue #177) ─────────────────────────
+// Server-Sent Events from the local prover/events server, which itself
+// polls Soroban RPC once and fans out to every connected browser (see
+// server/index.js). Falls back gracefully: callers keep their own
+// interval-based refresh as a backstop and just refresh sooner/less often
+// depending on whether this connects.
+const EVENTS_URL = import.meta.env?.VITE_EVENTS_URL || 'http://localhost:3001/events/stream'
+
+/** Subscribe to contract lifecycle events. `onEvent` is called with
+ *  `{ topic, ledger, id }` for each event. Returns an unsubscribe function.
+ *  Never throws — a construction failure (e.g. no EventSource support)
+ *  just means the caller's polling fallback keeps doing all the work. */
+export function subscribeToContractEvents(onEvent) {
+  let es
+  try {
+    es = new EventSource(EVENTS_URL)
+  } catch {
+    return () => {}
+  }
+  es.onmessage = (msg) => {
+    try {
+      onEvent(JSON.parse(msg.data))
+    } catch {
+      // malformed event payload — ignore, don't crash the subscriber
+    }
+  }
+  es.onerror = () => {
+    // EventSource auto-reconnects on transient errors; nothing to do here.
+    // The caller's polling fallback continues covering us regardless.
+  }
+  return () => es.close()
+}
+
 export async function checkAccount(address) {
   if (!address) return false
   try {
