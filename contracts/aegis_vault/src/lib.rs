@@ -39,6 +39,8 @@ pub enum VaultError {
     VerifierNotSet = 5,
     TokenNotSet = 6,
     RecipientMismatch = 7,
+    Unauthorized = 8,
+    AdminNotSet = 9,
 }
 
 #[contractevent(topics = ["claimed"], data_format = "map")]
@@ -59,6 +61,7 @@ pub struct FundedEvent<'a> {
 
 fn key_verifier()  -> Symbol { symbol_short!("verifier") }
 fn key_token()     -> Symbol { symbol_short!("token") }
+fn key_admin()     -> Symbol { symbol_short!("admin") }
 fn key_nullifier_prefix() -> Symbol { symbol_short!("nf") }
 fn key_campaign_prefix()  -> Symbol { symbol_short!("camp") }
 fn key_zone_prefix()      -> Symbol { symbol_short!("zone") }
@@ -153,15 +156,37 @@ fn call_verify_proof(
 
 #[contractimpl]
 impl AegisVault {
-    /// Deploy: set verifier contract address and reward token.
+    /// Deploy: set verifier contract address, reward token, and the admin
+    /// authorized to perform future upgrades (issue #176).
     pub fn __constructor(
         env: Env,
         verifier: Address,
         token: Address,
+        admin: Address,
     ) -> Result<(), VaultError> {
         env.storage().instance().set(&key_verifier(), &verifier);
         env.storage().instance().set(&key_token(), &token);
+        env.storage().instance().set(&key_admin(), &admin);
         Ok(())
+    }
+
+    /// Upgrade the contract's executable WASM to `new_wasm_hash`. Only the
+    /// admin set at deploy time may call this. Soroban's upgrade model
+    /// swaps the code while preserving existing instance/persistent
+    /// storage, so campaign balances and spent nullifiers survive the
+    /// upgrade untouched — no state migration needed.
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), VaultError> {
+        let admin: Address = env
+            .storage().instance().get(&key_admin())
+            .ok_or(VaultError::AdminNotSet)?;
+        admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Returns the current admin address, if set.
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().instance().get(&key_admin())
     }
 
     /// Fund a campaign zone. Transfers `amount` USDC from funder to this contract.
@@ -297,3 +322,6 @@ impl AegisVault {
         env.storage().instance().has(&nf_key)
     }
 }
+
+#[cfg(test)]
+mod test;
