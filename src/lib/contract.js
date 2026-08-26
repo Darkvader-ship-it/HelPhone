@@ -27,6 +27,7 @@ export const HELPHONE_NETWORKS = {
     label: 'Testnet',
     networkPassphrase: Networks.TESTNET,
     rpcUrl: import.meta.env?.VITE_STELLAR_TESTNET_RPC_URL || 'https://soroban-testnet.stellar.org',
+    horizonUrl: import.meta.env?.VITE_STELLAR_TESTNET_HORIZON_URL || 'https://horizon-testnet.stellar.org',
     contractId: import.meta.env?.VITE_HELPHONE_TESTNET_CONTRACT_ID || import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
     friendbotUrl: import.meta.env?.VITE_FRIENDBOT_URL || DEFAULT_FRIENDBOT_URL,
   },
@@ -34,6 +35,7 @@ export const HELPHONE_NETWORKS = {
     label: 'Futurenet',
     networkPassphrase: Networks.FUTURENET,
     rpcUrl: import.meta.env?.VITE_STELLAR_FUTURENET_RPC_URL || 'https://rpc-futurenet.stellar.org',
+    horizonUrl: import.meta.env?.VITE_STELLAR_FUTURENET_HORIZON_URL || 'https://horizon-futurenet.stellar.org',
     contractId: import.meta.env?.VITE_HELPHONE_FUTURENET_CONTRACT_ID || DEFAULT_CONTRACT_ID,
     friendbotUrl: import.meta.env?.VITE_FUTURENET_FRIENDBOT_URL || '',
   },
@@ -41,6 +43,7 @@ export const HELPHONE_NETWORKS = {
     label: 'Mainnet',
     networkPassphrase: Networks.PUBLIC,
     rpcUrl: import.meta.env?.VITE_STELLAR_MAINNET_RPC_URL || 'https://mainnet.sorobanrpc.com',
+    horizonUrl: import.meta.env?.VITE_STELLAR_MAINNET_HORIZON_URL || 'https://horizon.stellar.org',
     contractId: import.meta.env?.VITE_HELPHONE_MAINNET_CONTRACT_ID || import.meta.env?.VITE_HELPHONE_CONTRACT_ID || DEFAULT_CONTRACT_ID,
     friendbotUrl: '',
   },
@@ -388,6 +391,23 @@ export function subscribeToContractEvents(onEvent) {
   return () => es.close()
 }
 
+export async function getWalletBalances(address) {
+  if (!address) return [];
+
+  const url = new URL(`/accounts/${address}`, ACTIVE_NETWORK.horizonUrl);
+  const response = await fetch(url.toString());
+
+  if (!response.ok) {
+    if (response.status === 404) return [];
+    throw new Error('Could not load wallet balances');
+  }
+
+  const account = await response.json();
+  return (account.balances || []).map((balance) => ({
+    asset: balance.asset_type === 'native' ? 'XLM' : balance.asset_code,
+    balance: Number(balance.balance),
+  }));
+}
 export async function checkAccount(address) {
   if (!address) return false
   try {
