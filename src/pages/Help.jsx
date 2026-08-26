@@ -3921,7 +3921,13 @@ export default function Help() {
                         onKeyDown={handleSearchKeyDown}
                         autoComplete="off"
                         role="combobox"
-                        aria-expanded={searchSuggestions.length > 0}
+                        aria-autocomplete="list"
+                        aria-haspopup="listbox"
+                        aria-expanded={Boolean(
+                          (searchSuggestions.length > 0 ||
+                            searchSuggestLoading) &&
+                          searchQuery.trim(),
+                        )}
                         aria-controls="hp-search-suggestions"
                         aria-activedescendant={
                           activeSuggestion >= 0
