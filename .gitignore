@@ -26,3 +26,4 @@ support.js
 
 # Loose asset copies in root only
 /*.png
+tests/integration/.local-deployment.json
