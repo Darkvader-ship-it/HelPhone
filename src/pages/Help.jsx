@@ -321,6 +321,7 @@ export function ExplorerLink({ label, hash }) {
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+        minHeight: "44px",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.textDecoration = "underline";
@@ -736,6 +737,11 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
                     border: "none",
                     cursor: "pointer",
                     fontSize: "32px",
+                    minWidth: "44px",
+                    minHeight: "44px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     color:
                       star <= (hovered || rating)
                         ? "#FF7A6B"
@@ -1062,8 +1068,8 @@ export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
             aria-label="Close guide"
             onClick={onClose}
             style={{
-              width: "34px",
-              height: "34px",
+              width: "44px",
+              height: "44px",
               borderRadius: "8px",
               border: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(255,255,255,0.05)",
@@ -1071,6 +1077,9 @@ export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
               cursor: "pointer",
               fontSize: "18px",
               lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             x
@@ -2236,6 +2245,9 @@ export default function Help() {
   const zkProof = zkState.proof;
   const zkError = zkState.error;
 
+  // Issue #101 — screen-reader announcement for async ZK operations
+  const [zkAnnouncement, setZkAnnouncement] = useState('');
+
   const [walletAddress, setWalletAddress] = useState("");
   const activeWalletAddress =
     typeof walletAddress === "string" && walletAddress.trim().length > 0
@@ -2718,6 +2730,15 @@ export default function Help() {
   function resetZkCheckpoint() {
     dispatchZk({ type: "RESET" });
   }
+
+  // Issue #101 — announce ZK status transitions to screen readers
+  useEffect(() => {
+    if (zkStatus === 'proving') setZkAnnouncement('Location proof generation started');
+    else if (zkStatus === 'proved') setZkAnnouncement('Location proof generated successfully');
+    else if (zkStatus === 'recording') setZkAnnouncement('Recording proof on Stellar blockchain');
+    else if (zkStatus === 'recorded') setZkAnnouncement('Proof recorded on Stellar successfully');
+    else if (zkStatus === 'error') setZkAnnouncement(`Error: ${zkError || 'proof generation failed'}`);
+  }, [zkStatus, zkError]);
 
   // O(1) removal: Map keyed by numeric id — no linear scan.
   // NaN is rejected up front: every unparseable id would otherwise coerce to
@@ -3366,6 +3387,25 @@ export default function Help() {
         fontFamily: "'Inter','Helvetica Neue',sans-serif",
       }}
     >
+      {/* Issue #101 — visually hidden live region for screen reader announcements */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: 0,
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        {zkAnnouncement}
+      </div>
       <aside
         ref={sidebarRef}
         id="helphone-help-sidebar"
@@ -3392,6 +3432,7 @@ export default function Help() {
             display: "none",
             width: "100%",
             padding: "12px 0 6px",
+            minHeight: "44px",
             background: "transparent",
             border: "none",
             cursor: "pointer",
@@ -3435,6 +3476,9 @@ export default function Help() {
                 fontSize: "12px",
                 color: "rgba(242,236,220,0.35)",
                 textDecoration: "none",
+                minHeight: "44px",
+                display: "flex",
+                alignItems: "center",
               }}
             >
               ← Back
@@ -3467,7 +3511,8 @@ export default function Help() {
                   if (!isWalletConnected) promptWalletConnection();
                 }}
                 style={{
-                  padding: "10px 0",
+                  padding: "12px 0",
+                  minHeight: "44px",
                   borderRadius: "7px",
                   border: "none",
                   background: mode === m ? color : "transparent",

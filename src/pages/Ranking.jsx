@@ -209,87 +209,99 @@ export default function Ranking() {
             </p>
           </div>
         ) : (
-          <div style={{
+          <table style={{
+            width: '100%',
             background: '#fff',
             borderRadius: '16px',
             overflow: 'hidden',
-            boxShadow: '0 4px 24px rgba(35,75,78,0.08)'
+            boxShadow: '0 4px 24px rgba(35,75,78,0.08)',
+            borderCollapse: 'collapse'
           }}>
-            {/* Header row */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '48px 1fr 100px',
-              padding: '14px 20px',
-              borderBottom: '1px solid #e8e0d0',
-              fontSize: '11px',
-              letterSpacing: '1.5px',
-              fontWeight: '600',
-              color: '#a2a586'
+            <caption style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              padding: 0,
+              margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              whiteSpace: 'nowrap',
+              border: 0
             }}>
-              <span>#</span>
-              <span>RESPONDER</span>
-              <span style={{ textAlign: 'center' }}>ARRIVALS</span>
-            </div>
-
-            {rows.map((row, i) => (
-              <div
-                key={row.responder}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '48px 1fr 100px',
-                  padding: '16px 20px',
-                  borderBottom: i < rows.length - 1 ? '1px solid #f0e8d8' : 'none',
-                  alignItems: 'center',
-                  background: i % 2 === 0 ? '#fff' : '#fdfaf5'
-                }}
-              >
-                {/* Rank */}
-                <span style={{
-                  fontWeight: '700',
-                  fontSize: '18px',
-                  color: i < MEDALS.length ? '#3F8487' : '#a2a586'
-                }}>
-                  {i < MEDALS.length ? MEDALS[i] : `${i + 1}`}
-                </span>
-
-                {/* Address */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '36px', height: '36px', borderRadius: '50%',
-                    background: i < 3 ? '#3F8487' : '#ECE0CC',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '14px', fontWeight: '700',
-                    color: i < 3 ? '#fff' : '#234B4E',
-                    flexShrink: 0,
-                    fontFamily: "'Courier New', monospace"
-                  }}>
-                    {row.responder[7]?.toUpperCase() || '?'}
-                  </div>
-                  <span style={{
-                    fontSize: '13px', fontWeight: '500', color: '#234B4E',
-                    fontFamily: "'Courier New', monospace", letterSpacing: '-0.3px'
-                  }}>
-                    {row.responder.slice(0, 8)}…{row.responder.slice(-4)}
-                  </span>
-                </div>
-
-                {/* Arrivals */}
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    background: '#FF7A6B22',
-                    color: '#FF7A6B',
-                    fontSize: '13px',
-                    fontWeight: '600'
-                  }}>
-                    {row.total_arrivals}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+              Community responders leaderboard sorted by total arrivals
+            </caption>
+            <thead>
+              <tr style={{
+                borderBottom: '1px solid #e8e0d0',
+                fontSize: '11px',
+                letterSpacing: '1.5px',
+                fontWeight: '600',
+                color: '#a2a586'
+              }}>
+                <th scope="col" style={{ padding: '14px 20px', textAlign: 'left', fontWeight: '600' }}>#</th>
+                <th scope="col" style={{ padding: '14px 20px', textAlign: 'left', fontWeight: '600' }}>RESPONDER</th>
+                <th scope="col" style={{ padding: '14px 20px', textAlign: 'center', fontWeight: '600' }}>ARRIVALS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr
+                  key={row.responder}
+                  style={{
+                    borderBottom: i < rows.length - 1 ? '1px solid #f0e8d8' : 'none',
+                    background: i % 2 === 0 ? '#fff' : '#fdfaf5'
+                  }}
+                >
+                  <th
+                    scope="row"
+                    style={{
+                      padding: '16px 20px',
+                      fontWeight: '700',
+                      fontSize: '18px',
+                      color: i < MEDALS.length ? '#3F8487' : '#a2a586',
+                      textAlign: 'left'
+                    }}
+                  >
+                    {i < MEDALS.length ? MEDALS[i] : `${i + 1}`}
+                  </th>
+                  <td style={{ padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '36px', height: '36px', borderRadius: '50%',
+                        background: i < 3 ? '#3F8487' : '#ECE0CC',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '14px', fontWeight: '700',
+                        color: i < 3 ? '#fff' : '#234B4E',
+                        flexShrink: 0,
+                        fontFamily: "'Courier New', monospace"
+                      }}>
+                        {row.responder[7]?.toUpperCase() || '?'}
+                      </div>
+                      <span style={{
+                        fontSize: '13px', fontWeight: '500', color: '#234B4E',
+                        fontFamily: "'Courier New', monospace", letterSpacing: '-0.3px'
+                      }}>
+                        {row.responder.slice(0, 8)}…{row.responder.slice(-4)}
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      background: '#FF7A6B22',
+                      color: '#FF7A6B',
+                      fontSize: '13px',
+                      fontWeight: '600'
+                    }}>
+                      {row.total_arrivals}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
 
         <p style={{ fontSize: '12px', color: '#a2a586', marginTop: '24px', textAlign: 'center' }}>
