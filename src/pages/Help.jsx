@@ -2237,6 +2237,8 @@ export default function Help() {
   const zkError = zkState.error;
 
   const [walletAddress, setWalletAddress] = useState("");
+  const [walletBalances, setWalletBalances] = useState([]);
+  const [walletBalanceStatus, setWalletBalanceStatus] = useState("idle");
   const activeWalletAddress =
     typeof walletAddress === "string" && walletAddress.trim().length > 0
       ? walletAddress.trim()
@@ -4867,7 +4869,7 @@ export default function Help() {
           style={{ width: "100%", height: "100%" }}
           mapStyle={MAP_STYLES[mapStyleIndex].url}
           onClick={(e) => {
-            if (isGetMode && requestStatus === "idle") {
+            if (isGetMode && requestStatus === "idle" && e.lngLat) {
               setLocation([e.lngLat.lat, e.lngLat.lng]);
             }
           }}
