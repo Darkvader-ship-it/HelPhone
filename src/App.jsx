@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import useDocumentTitle from './lib/useDocumentTitle'
 
 export default function App() {
+  useDocumentTitle('Landing')
   const videoRef = useRef(null)
   const revealIdxRef = useRef(0)
   const [visibleElements, setVisibleElements] = useState(new Set())
