@@ -103,8 +103,7 @@ function CharMarker({
           src={`/assets/chars/${charName}.png`}
           alt=""
           onError={(e) => {
-            if (e.currentTarget.src.endsWith(`${CHARS.default[0]}.png`))
-              return;
+            if (e.currentTarget.src.endsWith(`${CHARS.default[0]}.png`)) return;
             e.currentTarget.src = `/assets/chars/${CHARS.default[0]}.png`;
           }}
           style={{
@@ -297,25 +296,6 @@ export function txExplorerUrl(hash) {
   if (!TX_HASH_PATTERN.test(trimmed)) return null;
   return `https://stellar.expert/explorer/testnet/tx/${trimmed}`;
 }
-
-export const HELP_ONBOARDING_STEPS = [
-  {
-    label: "Request",
-    title: "Help when you need it",
-    body: "HelPhone connects you with people nearby when you're in an emergency. You can request help or offer help to others. Everything runs on Stellar — fast, public, and verifiable.",
-  },
-  {
-    label: "Receipt",
-    title: "Your action goes on-chain first",
-    body: "When you request or offer help, Stellar confirms it in seconds. That creates a public transaction hash — your receipt.",
-  },
-  {
-    label: "Wallet",
-    title: "Connect your preferred wallet",
-    body: "Your Stellar wallet only signs transactions — it's not a tracking tool. Connect to request help, offer help, or verify your identity on the network.",
-    isLast: true,
-  },
-];
 
 export function ExplorerLink({ label, hash }) {
   const url = txExplorerUrl(hash);
@@ -639,14 +619,21 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
   const dialogRef = useRef(null);
 
   useEffect(() => {
-    if (open) { setRating(0); setHovered(0); setComment(""); setSubmitted(false); }
+    if (open) {
+      setRating(0);
+      setHovered(0);
+      setComment("");
+      setSubmitted(false);
+    }
   }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
     const prev = document.activeElement;
     dialogRef.current?.focus();
-    function handleKey(e) { if (e.key === "Escape") onClose(); }
+    function handleKey(e) {
+      if (e.key === "Escape") onClose();
+    }
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("keydown", handleKey);
@@ -665,8 +652,19 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        background: "rgba(0,0,0,0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         ref={dialogRef}
@@ -674,22 +672,56 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
         aria-modal="true"
         aria-labelledby="feedback-modal-title"
         tabIndex={-1}
-        style={{ width: "100%", maxWidth: "420px", borderRadius: "18px", background: "#1c2c24", border: "1px solid rgba(255,255,255,0.1)", padding: "28px 24px 24px", outline: "none" }}
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          borderRadius: "18px",
+          background: "#1c2c24",
+          border: "1px solid rgba(255,255,255,0.1)",
+          padding: "28px 24px 24px",
+          outline: "none",
+        }}
       >
         {submitted ? (
           <div style={{ textAlign: "center", padding: "16px 0" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>✓</div>
-            <p style={{ color: "#F4ECDC", fontWeight: 700, margin: 0 }}>Thanks for your feedback!</p>
+            <p style={{ color: "#F4ECDC", fontWeight: 700, margin: 0 }}>
+              Thanks for your feedback!
+            </p>
           </div>
         ) : (
           <>
-            <h2 id="feedback-modal-title" style={{ margin: "0 0 6px", color: "#F4ECDC", fontSize: "20px", fontWeight: 700 }}>
+            <h2
+              id="feedback-modal-title"
+              style={{
+                margin: "0 0 6px",
+                color: "#F4ECDC",
+                fontSize: "20px",
+                fontWeight: 700,
+              }}
+            >
               Rate your responder
             </h2>
-            <p style={{ margin: "0 0 20px", color: "rgba(242,236,220,0.55)", fontSize: "13px", lineHeight: 1.55 }}>
+            <p
+              style={{
+                margin: "0 0 20px",
+                color: "rgba(242,236,220,0.55)",
+                fontSize: "13px",
+                lineHeight: 1.55,
+              }}
+            >
               Your rating builds on-chain reputation for responders who show up.
             </p>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "20px" }} role="group" aria-label="Star rating">
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                justifyContent: "center",
+                marginBottom: "20px",
+              }}
+              role="group"
+              aria-label="Star rating"
+            >
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -698,7 +730,17 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHovered(star)}
                   onMouseLeave={() => setHovered(0)}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "32px", color: star <= (hovered || rating) ? "#FF7A6B" : "rgba(255,255,255,0.15)", transition: "color 0.15s" }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "32px",
+                    color:
+                      star <= (hovered || rating)
+                        ? "#FF7A6B"
+                        : "rgba(255,255,255,0.15)",
+                    transition: "color 0.15s",
+                  }}
                 >
                   ★
                 </button>
@@ -710,17 +752,54 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
               maxLength={500}
               placeholder="Optional comment…"
               rows={3}
-              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "#F4ECDC", fontSize: "13px", padding: "10px 12px", resize: "vertical", outline: "none", marginBottom: "16px" }}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "10px",
+                color: "#F4ECDC",
+                fontSize: "13px",
+                padding: "10px 12px",
+                resize: "vertical",
+                outline: "none",
+                marginBottom: "16px",
+              }}
             />
             <div style={{ display: "flex", gap: "10px" }}>
-              <button type="button" onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(242,236,220,0.65)", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.65)",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
                 Skip
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={rating === 0}
-                style={{ flex: 2, padding: "12px", borderRadius: "10px", border: "none", background: rating > 0 ? "#FF7A6B" : "rgba(255,122,107,0.3)", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: rating > 0 ? "pointer" : "not-allowed", transition: "background 0.2s" }}
+                style={{
+                  flex: 2,
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: rating > 0 ? "#FF7A6B" : "rgba(255,122,107,0.3)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: rating > 0 ? "pointer" : "not-allowed",
+                  transition: "background 0.2s",
+                }}
               >
                 Submit rating
               </button>
@@ -745,17 +824,39 @@ const ET_COLORS = Object.freeze({
   other: "#3F8487",
 });
 
-export function EmergencyMarker({ lat, lng, emergencyType, onClick, children }) {
+export function EmergencyMarker({
+  lat,
+  lng,
+  emergencyType,
+  onClick,
+  children,
+}) {
   const color = ET_COLORS[emergencyType] || "#FF7A6B";
   const icon = ET_ICONS[emergencyType] || ET_ICONS.other;
   return (
     <Marker latitude={lat} longitude={lng} onClick={onClick}>
       <div style={{ position: "relative", cursor: "pointer" }}>
-        <svg width="36" height="44" viewBox="0 0 36 44" fill="none" aria-label={emergencyType || "emergency"}>
-          <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill={color} />
+        <svg
+          width="36"
+          height="44"
+          viewBox="0 0 36 44"
+          fill="none"
+          aria-label={emergencyType || "emergency"}
+        >
+          <path
+            d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z"
+            fill={color}
+          />
           <circle cx="18" cy="18" r="13" fill="rgba(0,0,0,0.25)" />
         </svg>
-        <div style={{ position: "absolute", top: "7px", left: "8px", color: "#fff" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "7px",
+            left: "8px",
+            color: "#fff",
+          }}
+        >
           {icon}
         </div>
         {children}
@@ -768,13 +869,52 @@ export function MapLegend() {
   return (
     <div
       aria-label="Map legend"
-      style={{ position: "absolute", bottom: "48px", right: "12px", zIndex: 100, background: "rgba(20,32,28,0.92)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 12px", minWidth: "148px" }}
+      style={{
+        position: "absolute",
+        bottom: "48px",
+        right: "12px",
+        zIndex: 100,
+        background: "rgba(20,32,28,0.92)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "10px",
+        padding: "10px 12px",
+        minWidth: "148px",
+      }}
     >
-      <div style={{ fontSize: "9px", letterSpacing: "1.2px", color: "#7fb8ba", fontWeight: 900, marginBottom: "8px" }}>EMERGENCY TYPES</div>
+      <div
+        style={{
+          fontSize: "9px",
+          letterSpacing: "1.2px",
+          color: "#7fb8ba",
+          fontWeight: 900,
+          marginBottom: "8px",
+        }}
+      >
+        EMERGENCY TYPES
+      </div>
       {EMERGENCY_TYPES.filter((et) => et.id !== "other").map((et) => (
-        <div key={et.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
-          <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: ET_COLORS[et.id] || "#FF7A6B", flexShrink: 0 }} />
-          <span style={{ fontSize: "11px", color: "rgba(242,236,220,0.75)" }}>{et.icon} {et.label}</span>
+        <div
+          key={et.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "5px",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              width: "10px",
+              height: "10px",
+              borderRadius: "50%",
+              background: ET_COLORS[et.id] || "#FF7A6B",
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "rgba(242,236,220,0.75)" }}>
+            {et.icon} {et.label}
+          </span>
         </div>
       ))}
     </div>
@@ -1913,10 +2053,22 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
         >
           Choose your avatar
         </h3>
-        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(242,236,220,0.4)" }}>
+        <p
+          style={{
+            margin: "0 0 16px",
+            fontSize: "12px",
+            color: "rgba(242,236,220,0.4)",
+          }}
+        >
           Pick a character to represent you on the map.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "8px",
+          }}
+        >
           {ALL_CHARS.map((name) => (
             <button
               key={name}
@@ -1928,15 +2080,26 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
                 borderRadius: "10px",
                 overflow: "hidden",
                 cursor: "pointer",
-                background: selected === name ? "rgba(115,87,255,0.2)" : "rgba(255,255,255,0.04)",
-                border: selected === name ? "2px solid #7357FF" : "2px solid rgba(255,255,255,0.08)",
+                background:
+                  selected === name
+                    ? "rgba(115,87,255,0.2)"
+                    : "rgba(255,255,255,0.04)",
+                border:
+                  selected === name
+                    ? "2px solid #7357FF"
+                    : "2px solid rgba(255,255,255,0.08)",
                 transition: "all 0.15s",
               }}
             >
               <img
                 src={`/assets/chars/${name}.png`}
                 alt={name}
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
               />
             </button>
           ))}
@@ -1983,7 +2146,8 @@ export default function Help() {
   });
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackRequestId, setFeedbackRequestId] = useState(null);
-  const [feedbackResponderAddress, setFeedbackResponderAddress] = useState(null);
+  const [feedbackResponderAddress, setFeedbackResponderAddress] =
+    useState(null);
 
   const [location, setLocation] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -2095,8 +2259,11 @@ export default function Help() {
 
   useEffect(() => {
     const token = cancellationToken();
-    const { debouncedSet, flush: flushAddr, cancel: cancelAddr } =
-      createDebouncedSetter(setWalletAddress, 100);
+    const {
+      debouncedSet,
+      flush: flushAddr,
+      cancel: cancelAddr,
+    } = createDebouncedSetter(setWalletAddress, 100);
     let offState = () => {};
     let offDisconnect = () => {};
 
@@ -2163,11 +2330,12 @@ export default function Help() {
   // (#137) Sync preferences to the backend when the wallet is connected.
   // On wallet connect: load server prefs and merge over localStorage.
   // On profile change: push latest prefs to the server.
-  const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+  const SERVER_BASE =
+    import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
   useEffect(() => {
     if (!activeWalletAddress) return;
     fetch(`${SERVER_BASE}/api/preferences/${activeWalletAddress}`)
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.preferences && Object.keys(data.preferences).length > 0) {
           setProfile((prev) => ({ ...prev, ...data.preferences }));
@@ -2669,28 +2837,28 @@ export default function Help() {
   // Prevents inaccurate state synchronization by handling cross-origin rejections
   const _checkpointRecordLock = new Map();
   const _LOCK_TTL = 30000; // 30 second lock TTL for stale lock cleanup
-  
+
   async function recordZkCheckpoint(address, action, txHash, checkpoint) {
     if (!checkpoint?.nullifier) return;
-    
+
     // Prevent parallel recording of same checkpoint to avoid state sync issues
     const lockKey = `${checkpoint.nullifier}-${action}`;
     const existingLock = _checkpointRecordLock.get(lockKey);
-    
+
     // Clean up stale locks
-    if (existingLock && (Date.now() - existingLock.timestamp) > _LOCK_TTL) {
+    if (existingLock && Date.now() - existingLock.timestamp > _LOCK_TTL) {
       _checkpointRecordLock.delete(lockKey);
     } else if (existingLock) {
       pushZkLog("Checkpoint recording already in progress");
       return;
     }
-    
+
     _checkpointRecordLock.set(lockKey, { timestamp: Date.now() });
-    
+
     try {
       dispatchZk({ type: "SET_STATUS", payload: "recording" });
       pushZkLog("Writing proof fingerprint to Stellar");
-      
+
       // Parallelize with timeout to handle CORS rejections safely
       const recordPromise = recordExpertVerification(
         address,
@@ -2699,13 +2867,13 @@ export default function Help() {
         checkpoint.nullifier,
         StellarWalletsKit,
       );
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("CORS timeout")), 15000)
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("CORS timeout")), 15000),
       );
-      
+
       const record = await Promise.race([recordPromise, timeoutPromise]);
-      
+
       dispatchZk({
         type: "PATCH_PROOF",
         payload: { recordTxHash: record.hash || "" },
@@ -2714,7 +2882,7 @@ export default function Help() {
       pushZkLog("Stellar checkpoint recorded");
     } catch (err) {
       dispatchZk({ type: "SET_STATUS", payload: "proved" });
-      
+
       // CORS-safe error handling - don't expose sensitive error details
       let errorMsg = "wallet rejected";
       if (err.message?.includes("CORS") || err.message?.includes("network")) {
@@ -2724,9 +2892,9 @@ export default function Help() {
       } else if (err.message?.includes("fetch")) {
         errorMsg = "connection failed";
       }
-      
+
       pushZkLog(`Checkpoint record skipped: ${errorMsg}`);
-      
+
       // Ensure state is synchronized even on rejection
       dispatchZk({
         type: "PATCH_PROOF",
@@ -3128,10 +3296,7 @@ export default function Help() {
     setResponders([]);
   }, [mode, requestId]);
 
-  const openRequestsArray = useMemo(
-    () => openRequestsArray,
-    [openRequests],
-  );
+  const openRequestsArray = useMemo(() => openRequestsArray, [openRequests]);
 
   const step1Done = !!location;
   const step2Done = !!emergencyType;
@@ -4445,35 +4610,67 @@ export default function Help() {
                   )}
                 </div>
                 {myRequestsLoading && myRequests.length === 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
                     <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} style={{
-                        padding: "10px 12px",
-                        borderRadius: "8px",
-                        background: "rgba(255,255,255,0.03)",
-                        border: "1px solid rgba(255,255,255,0.05)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <div style={{
-                            width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
-                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
-                            backgroundSize: "200px 100%",
-                            animation: "hp-shimmer 1.6s ease-in-out infinite"
-                          }} />
-                          <div style={{
-                            width: "80px", height: "10px", borderRadius: "3px",
-                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
-                            backgroundSize: "200px 100%",
-                            animation: "hp-shimmer 1.6s ease-in-out infinite"
-                          }} />
+                      <div
+                        key={i}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "8px",
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              flexShrink: 0,
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                              backgroundSize: "200px 100%",
+                              animation: "hp-shimmer 1.6s ease-in-out infinite",
+                            }}
+                          />
+                          <div
+                            style={{
+                              width: "80px",
+                              height: "10px",
+                              borderRadius: "3px",
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                              backgroundSize: "200px 100%",
+                              animation: "hp-shimmer 1.6s ease-in-out infinite",
+                            }}
+                          />
                         </div>
-                        <div style={{
-                          width: "50px", height: "8px", borderRadius: "3px",
-                          background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
-                          backgroundSize: "200px 100%",
-                          animation: "hp-shimmer 1.6s ease-in-out infinite"
-                        }} />
+                        <div
+                          style={{
+                            width: "50px",
+                            height: "8px",
+                            borderRadius: "3px",
+                            background:
+                              "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
+                            backgroundSize: "200px 100%",
+                            animation: "hp-shimmer 1.6s ease-in-out infinite",
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
@@ -4797,7 +4994,9 @@ export default function Help() {
                     </strong>
                     <br />
                     <span style={{ fontSize: "11px", color: "#a2a586" }}>
-                      {EMERGENCY_TYPES.find((e) => e.id === req.emergency_type)?.label || "Needs help"} · Click sidebar to respond
+                      {EMERGENCY_TYPES.find((e) => e.id === req.emergency_type)
+                        ?.label || "Needs help"}{" "}
+                      · Click sidebar to respond
                     </span>
                   </Popup>
                 )}
@@ -5345,10 +5544,21 @@ export default function Help() {
                     <img
                       src={`/assets/chars/${myChar}.png`}
                       alt=""
-                      style={{ width: "32px", height: "32px", objectFit: "contain" }}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        objectFit: "contain",
+                      }}
                     />
-                    <span style={{ fontSize: "12px", color: "rgba(242,236,220,0.6)" }}>
-                      {selectedChar ? "Change avatar" : "Auto-pick · tap to choose"}
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: "rgba(242,236,220,0.6)",
+                      }}
+                    >
+                      {selectedChar
+                        ? "Change avatar"
+                        : "Auto-pick · tap to choose"}
                     </span>
                   </button>
                 </div>
@@ -5361,7 +5571,9 @@ export default function Help() {
           open={showOnboarding}
           onClose={() => {
             setShowOnboarding(false);
-            try { localStorage.setItem("hp_tour_done", "1"); } catch {}
+            try {
+              localStorage.setItem("hp_tour_done", "1");
+            } catch {}
           }}
           onConnectWallet={() => promptWalletConnection()}
         />
@@ -5377,12 +5589,18 @@ export default function Help() {
           open={showFeedback}
           onClose={() => setShowFeedback(false)}
           onSubmit={async ({ rating, comment }) => {
-            const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+            const SERVER_BASE =
+              import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
             try {
               await fetch(`${SERVER_BASE}/api/feedback`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ requestId: feedbackRequestId, responderAddress: feedbackResponderAddress, rating, comment }),
+                body: JSON.stringify({
+                  requestId: feedbackRequestId,
+                  responderAddress: feedbackResponderAddress,
+                  rating,
+                  comment,
+                }),
               });
             } catch {}
           }}
