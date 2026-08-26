@@ -2208,7 +2208,7 @@ export default function Help() {
     } catch {}
   }, [selectedChar]);
 
-  const [openRequests, setOpenRequests] = useState(new Map());
+  const [openRequests, setOpenRequests] = useState(new globalThis.Map());
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [lastOfferReceipt, setLastOfferReceipt] = useState(null);
@@ -2440,7 +2440,9 @@ export default function Help() {
           ),
         ).then((results) => results.filter(Boolean));
         if (token.active) {
-          const map = new Map(requests.map((req) => [Number(req.id), req]));
+          const map = new globalThis.Map(
+            requests.map((req) => [Number(req.id), req]),
+          );
           setOpenRequests(map);
           setSelectedRequest((current) => {
             if (!current) return current;
@@ -2727,7 +2729,7 @@ export default function Help() {
     );
     setOpenRequests((prev) => {
       if (!prev.has(key)) return prev;
-      const next = new Map(prev);
+      const next = new globalThis.Map(prev);
       next.delete(key);
       return next;
     });
@@ -2738,7 +2740,7 @@ export default function Help() {
     if (!Number.isFinite(key)) return null;
     const request = { ...fresh, id: key };
     setOpenRequests((prev) => {
-      const next = new Map(prev);
+      const next = new globalThis.Map(prev);
       next.set(key, request);
       return next;
     });
@@ -2762,7 +2764,7 @@ export default function Help() {
   }
 
   // Track active refresh operations to prevent concurrent access control bypass
-  const _refreshLocks = new Map();
+  const _refreshLocks = new globalThis.Map();
 
   async function refreshPendingRequest(reqId) {
     // Normalize before locking/keying: a raw reqId can arrive as a string or
@@ -2835,7 +2837,7 @@ export default function Help() {
 
   // Parallelized checkpoint recording with CORS-safe error handling
   // Prevents inaccurate state synchronization by handling cross-origin rejections
-  const _checkpointRecordLock = new Map();
+  const _checkpointRecordLock = new globalThis.Map();
   const _LOCK_TTL = 30000; // 30 second lock TTL for stale lock cleanup
 
   async function recordZkCheckpoint(address, action, txHash, checkpoint) {
@@ -3074,7 +3076,7 @@ export default function Help() {
       );
       if (!handleOfferMounted.current) return;
       setOpenRequests((prev) => {
-        const next = new Map(prev);
+        const next = new globalThis.Map(prev);
         next.delete(reqId);
         return next;
       });
@@ -3296,7 +3298,10 @@ export default function Help() {
     setResponders([]);
   }, [mode, requestId]);
 
-  const openRequestsArray = useMemo(() => openRequestsArray, [openRequests]);
+  const openRequestsArray = useMemo(
+    () => Array.from(openRequests.values()),
+    [openRequests],
+  );
 
   const step1Done = !!location;
   const step2Done = !!emergencyType;
@@ -5209,6 +5214,7 @@ export default function Help() {
               }
               promptWalletConnection();
             }}
+            aria-label={isWalletConnected ? "Open profile" : "Connect Wallet"}
             style={{
               width: "44px",
               height: "44px",
