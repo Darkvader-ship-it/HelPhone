@@ -35,6 +35,7 @@ export default [
         __dirname: "readonly",
         __VU: "readonly",
         __ITER: "readonly",
+        __ENV: "readonly",
       },
     },
     rules: {
