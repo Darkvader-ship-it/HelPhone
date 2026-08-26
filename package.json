@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
@@ -44,6 +45,7 @@
     "globals": "^17.11.0",
     "husky": "^9.0.0",
     "jest-axe": "^11.0.0",
+    "jest-canvas-mock": "^2.5.8",
     "jsdom": "^29.1.1",
     "lint-staged": "^15.0.0",
     "msw": "^2.15.0",
