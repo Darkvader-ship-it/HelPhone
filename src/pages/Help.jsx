@@ -93,6 +93,16 @@ function CharMarker({
   return (
     <Marker latitude={lat} longitude={lng} onClick={onClick}>
       <div
+        className="hp-marker"
+        tabIndex={0}
+        role="button"
+        aria-label={`Responder marker for ${charName}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick?.(e);
+          }
+        }}
         style={{
           position: "relative",
           width: 52,
@@ -140,6 +150,93 @@ function MapController({ center, zoom = 14 }) {
       return;
     map.flyTo({ center: [center[1], center[0]], zoom, duration: 1200 });
   }, [center, zoom, map]);
+  return null;
+}
+
+function MapKeyboardControls() {
+  const { current: map } = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    const mapContainer = map.getContainer();
+    if (!mapContainer) return;
+
+    // Ensure the container itself can be focused so keydowns are captured
+    mapContainer.setAttribute("tabindex", "0");
+    // Ensure the canvas is not in tab order so we don't double tab
+    const canvas = map.getCanvas();
+    if (canvas) {
+      canvas.setAttribute("tabindex", "-1");
+    }
+
+    // Set styling for focus outline
+    const styleId = "map-focus-styles";
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = styleId;
+      styleEl.innerHTML = `
+        .mapboxgl-map:focus {
+          outline: 2px solid #FF7A6B;
+          outline-offset: -2px;
+        }
+        .hp-marker:focus {
+          outline: 3px solid #FF7A6B !important;
+          outline-offset: 4px;
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    const handleKeyDown = (e) => {
+      const activeEl = document.activeElement;
+      // Only handle if map container has focus or contains the focused element (excluding inputs/textarea)
+      if (activeEl !== mapContainer && !mapContainer.contains(activeEl)) return;
+      if (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")
+        return;
+
+      const PAN_OFFSET = 100; // pixels to pan
+      const ZOOM_OFFSET = 0.5; // zoom level delta
+
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          map.panBy([0, -PAN_OFFSET]);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          map.panBy([0, PAN_OFFSET]);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          map.panBy([-PAN_OFFSET, 0]);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          map.panBy([PAN_OFFSET, 0]);
+          break;
+        case "+":
+        case "=":
+          e.preventDefault();
+          map.zoomTo(map.getZoom() + ZOOM_OFFSET);
+          break;
+        case "-":
+        case "_":
+          e.preventDefault();
+          map.zoomTo(map.getZoom() - ZOOM_OFFSET);
+          break;
+        default:
+          break;
+      }
+    };
+
+    mapContainer.addEventListener("keydown", handleKeyDown);
+    return () => {
+      mapContainer.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [map]);
+
   return null;
 }
 
@@ -836,7 +933,19 @@ export function EmergencyMarker({
   const icon = ET_ICONS[emergencyType] || ET_ICONS.other;
   return (
     <Marker latitude={lat} longitude={lng} onClick={onClick}>
-      <div style={{ position: "relative", cursor: "pointer" }}>
+      <div
+        className="hp-marker"
+        tabIndex={0}
+        role="button"
+        aria-label={`Emergency: ${emergencyType}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick?.(e);
+          }
+        }}
+        style={{ position: "relative", cursor: "pointer" }}
+      >
         <svg
           width="36"
           height="44"
@@ -4882,6 +4991,7 @@ export default function Help() {
         >
           {location && <MapController center={location} zoom={14} />}
           <NavigationControl position="bottom-right" />
+          <MapKeyboardControls />
 
           {isGetMode && location && (
             <CharMarker
