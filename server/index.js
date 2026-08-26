@@ -8,6 +8,70 @@ import { rpc } from '@stellar/stellar-sdk'
 import { normalizeBase64 } from './base64Utils.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ── Rate limiter ─────────────────────────────────────────────────────────────
+// In-memory sliding-window rate limiter. Tracks request counts per IP within
+// a rolling window and returns 429 when the limit is exceeded.
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 60)
+
+export function createRateLimiter({ windowMs = RATE_LIMIT_WINDOW_MS, max = RATE_LIMIT_MAX } = {}) {
+  const hits = new Map()
+
+  function cleanup(now) {
+    for (const [key, entry] of hits) {
+      if (now - entry.start > windowMs) hits.delete(key)
+    }
+  }
+
+  function middleware(req, res, next) {
+    const ip = req.ip || req.socket?.remoteAddress || 'unknown'
+    const now = Date.now()
+    cleanup(now)
+
+    const entry = hits.get(ip)
+    if (!entry || now - entry.start > windowMs) {
+      hits.set(ip, { start: now, count: 1 })
+    } else {
+      entry.count++
+    }
+
+    const current = hits.get(ip)
+    res.setHeader('X-RateLimit-Limit', max)
+    res.setHeader('X-RateLimit-Remaining', Math.max(0, max - current.count))
+    res.setHeader('X-RateLimit-Reset', new Date(current.start + windowMs).toISOString())
+
+    if (current.count > max) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests. Please try again later.',
+      })
+    }
+    next()
+  }
+
+  // Expose for testing: reset internal state
+  middleware._reset = () => hits.clear()
+  return middleware
+}
+
+// ── Custom error handler ─────────────────────────────────────────────────────
+// Formats all unhandled errors into a consistent JSON envelope so the client
+// always receives a parseable response, never an HTML stack trace.
+export function errorHandler(err, _req, res, _next) {
+  const status = err.status || err.statusCode || 500
+  const message = process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : err.message || 'Internal server error'
+
+  console.error(`[error] ${status}: ${message}`)
+  res.status(status).json({
+    success: false,
+    error: message,
+    ...(process.env.NODE_ENV !== 'production' && err.stack ? { stack: err.stack } : {}),
+  })
+}
+
 const app = express()
 const PORT = process.env.PORT || 3001
 
@@ -21,6 +85,12 @@ app.use(cors({
   optionsSuccessStatus: 204
 }))
 app.use(express.json({ limit: '1mb' }))
+
+// Rate limiter on all routes (disabled in test)
+if (process.env.NODE_ENV !== 'test') {
+  const rateLimiter = createRateLimiter()
+  app.use(rateLimiter)
+}
 
 // ── Contract event bridge ────────────────────────────────────────
 // Issue #177: the frontend used to poll the contract directly on a timer
@@ -100,7 +170,9 @@ app.get('/events/stream', (req, res) => {
   req.on('close', () => sseClients.delete(res))
 })
 
-setInterval(pollContractEvents, EVENT_POLL_MS)
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(pollContractEvents, EVENT_POLL_MS)
+}
 
 let _noir = null
 let _backend = null
@@ -220,7 +292,19 @@ app.get('/api/ranking', async (req, res) => {
   }
 })
 
-app.listen(PORT, () => {
-  console.log(`ZK Prover on http://localhost:${PORT}`)
-  ensureProver().catch(err => console.error('[prover] Init failed:', err))
-})
+// ── Error handler (must be last) ────────────────────────────────────────────
+app.use(errorHandler)
+
+// Only listen when run directly, not when imported for testing
+const isDirectRun = process.argv[1] && (
+  process.argv[1].endsWith('/index.js') || process.argv[1].endsWith('\\index.js')
+)
+
+if (isDirectRun || process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`ZK Prover on http://localhost:${PORT}`)
+    ensureProver().catch(err => console.error('[prover] Init failed:', err))
+  })
+}
+
+export { app }

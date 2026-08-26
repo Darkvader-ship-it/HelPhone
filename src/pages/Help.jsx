@@ -297,6 +297,25 @@ export function txExplorerUrl(hash) {
   return `https://stellar.expert/explorer/testnet/tx/${trimmed}`;
 }
 
+export const HELP_ONBOARDING_STEPS = [
+  {
+    label: "Request",
+    title: "Help when you need it",
+    body: "HelPhone connects you with people nearby when you're in an emergency. You can request help or offer help to others. Everything runs on Stellar — fast, public, and verifiable.",
+  },
+  {
+    label: "Receipt",
+    title: "Your action goes on-chain first",
+    body: "When you request or offer help, Stellar confirms it in seconds. That creates a public transaction hash — your receipt.",
+  },
+  {
+    label: "Wallet",
+    title: "Connect your preferred wallet",
+    body: "Your Stellar wallet only signs transactions — it's not a tracking tool. Connect to request help, offer help, or verify your identity on the network.",
+    isLast: true,
+  },
+];
+
 export function ExplorerLink({ label, hash }) {
   const url = txExplorerUrl(hash);
   if (!url) return null;

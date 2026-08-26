@@ -12,7 +12,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:a11y": "vitest run test/a11y-components.test.jsx",
+    "test:e2e": "playwright test",
+    "test:e2e:a11y": "playwright test tests/e2e/a11y.spec.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,9 +25,12 @@
     "node": "22.x"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
+    "axe-core": "^4.13.0",
+    "jest-axe": "^11.0.0",
     "jsdom": "^29.1.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.10"
