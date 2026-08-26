@@ -47,3 +47,42 @@ jobs:
       
       - name: Build project
         run: npm run build
+
+  contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            contracts/aegis_vault
+            contract
+
+      - name: Run cargo test (aegis_vault)
+        working-directory: contracts/aegis_vault
+        run: cargo test --locked
+
+      # The `soroban` CLI was renamed to `stellar` (soroban-cli -> stellar-cli);
+      # `stellar contract build` is the current equivalent of the issue's
+      # `soroban contract build` and is what compiles contracts to the
+      # wasm32v1-none target actually deployed (see soroban-contract.md's
+      # documented deploy steps).
+      - name: Install Stellar CLI
+        run: cargo install --locked stellar-cli --version ^23
+
+      - name: Build aegis_vault contract (stellar contract build)
+        working-directory: contracts/aegis_vault
+        run: stellar contract build
+
+      - name: Build helphone-contract (stellar contract build)
+        working-directory: contract
+        run: stellar contract build
