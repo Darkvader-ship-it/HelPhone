@@ -7,6 +7,13 @@ export default function App() {
   const videoRef = useRef(null);
   const revealIdxRef = useRef(0);
   const [visibleElements, setVisibleElements] = useState(new Set());
+  const [isPlaying, setIsPlaying] = useState(() => {
+    try {
+      return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {
+      return true;
+    }
+  });
 
   useEffect(() => {
     const elements = document.querySelectorAll("[data-reveal]");
@@ -59,6 +66,7 @@ export default function App() {
     let rafId = null;
 
     const reverse = (t) => {
+      if (!isPlaying) return; // Stop reversing if paused
       if (!reversing) return;
       if (!last) last = t;
       const dt = (t - last) / 1000;
@@ -70,7 +78,9 @@ export default function App() {
         } catch (e) {}
         reversing = false;
         last = 0;
-        v.play().catch(() => {});
+        if (isPlaying) {
+          v.play().catch(() => {});
+        }
         return;
       }
       try {
@@ -80,6 +90,7 @@ export default function App() {
     };
 
     const onEnded = () => {
+      if (!isPlaying) return;
       reversing = true;
       last = 0;
       v.pause();
@@ -88,17 +99,21 @@ export default function App() {
 
     v.addEventListener("ended", onEnded);
 
-    const tryPlay = () => {
-      v.play().catch(() => {});
-    };
-    if (v.readyState >= 2) tryPlay();
-    else v.addEventListener("canplay", tryPlay, { once: true });
+    if (isPlaying) {
+      const tryPlay = () => {
+        v.play().catch(() => {});
+      };
+      if (v.readyState >= 2) tryPlay();
+      else v.addEventListener("canplay", tryPlay, { once: true });
+    } else {
+      v.pause();
+    }
 
     return () => {
       v.removeEventListener("ended", onEnded);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [isPlaying]);
 
   // Reset the reveal counter at the start of render
   revealIdxRef.current = 0;
@@ -134,150 +149,149 @@ export default function App() {
         overflowX: "hidden",
       }}
     >
+      <a href="#main-content" className="skip-link">
+        Skip to Content
+      </a>
       {/* NAVBAR */}
-      <header role="banner">
-        <nav
-          role="navigation"
-          aria-label="Primary"
+      <nav
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 60,
+          width: "min(1160px, calc(100% - 32px))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 12px 10px 22px",
+          borderRadius: "16px",
+          background: "rgba(18, 28, 20, 0.68)",
+          backdropFilter: "blur(28px) saturate(1.4)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+        }}
+      >
+        <a
+          href="#top"
           style={{
-            position: "fixed",
-            top: "18px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 60,
-            width: "min(1160px, calc(100% - 32px))",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            padding: "10px 12px 10px 22px",
-            borderRadius: "16px",
-            background: "rgba(18, 28, 20, 0.68)",
-            backdropFilter: "blur(28px) saturate(1.4)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+            textDecoration: "none",
+            gap: "1px",
           }}
         >
-          <a
-            href="#top"
+          <span
             style={{
-              display: "flex",
-              alignItems: "center",
-              textDecoration: "none",
-              gap: "1px",
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: "21px",
+              letterSpacing: "0.2px",
+              color: "#F4ECDC",
+              fontStyle: "italic",
             }}
           >
-            <span
-              style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontSize: "21px",
-                letterSpacing: "0.2px",
-                color: "#F4ECDC",
-                fontStyle: "italic",
-              }}
-            >
-              Hel
-            </span>
-            <span
-              style={{
-                fontFamily: "'Instrument Serif', serif",
-                fontSize: "21px",
-                letterSpacing: "0.2px",
-                color: "#a2a586",
-              }}
-            >
-              Phone
-            </span>
-          </a>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            {[
-              { href: "#how", label: "How it works" },
-              { href: "#trust", label: "Trust & Safety" },
-              { href: "#coverage", label: "Coverage" },
-              { to: "/ranking", label: "Ranking", internal: true },
-            ].map((link) =>
-              link.internal ? (
-                <Link
-                  key={link.label}
-                  to={link.to}
-                  style={{
-                    textDecoration: "none",
-                    color: "rgba(242, 236, 220, 0.65)",
-                    fontSize: "13.5px",
-                    fontWeight: "500",
-                    padding: "7px 12px",
-                    borderRadius: "8px",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "rgba(255,255,255,0.06)";
-                    e.target.style.color = "rgba(242,236,220,0.9)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "transparent";
-                    e.target.style.color = "rgba(242,236,220,0.65)";
-                  }}
-                >
-                  {link.label}
-                </Link>
-              ) : (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  style={{
-                    textDecoration: "none",
-                    color: "rgba(242, 236, 220, 0.65)",
-                    fontSize: "13.5px",
-                    fontWeight: "500",
-                    padding: "7px 12px",
-                    borderRadius: "8px",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = "rgba(255,255,255,0.06)";
-                    e.target.style.color = "rgba(242,236,220,0.9)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = "transparent";
-                    e.target.style.color = "rgba(242,236,220,0.65)";
-                  }}
-                >
-                  {link.label}
-                </a>
-              ),
-            )}
-            <Link
-              to="/help"
-              style={{
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                color: "#fff",
-                fontWeight: "600",
-                fontSize: "13.5px",
-                padding: "8px 16px",
-                borderRadius: "10px",
-                background: "#FF7A6B",
-                marginLeft: "6px",
-                transition: "all 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = "#ff6b5a";
-                e.target.style.boxShadow = "0 4px 16px rgba(255,122,107,0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = "#FF7A6B";
-                e.target.style.boxShadow = "none";
-              }}
-            >
-              Request Help
-            </Link>
-          </div>
-        </nav>
-      </header>
+            Hel
+          </span>
+          <span
+            style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: "21px",
+              letterSpacing: "0.2px",
+              color: "#a2a586",
+            }}
+          >
+            Phone
+          </span>
+        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {[
+            { href: "#how", label: "How it works" },
+            { href: "#trust", label: "Trust & Safety" },
+            { href: "#coverage", label: "Coverage" },
+            { to: "/ranking", label: "Ranking", internal: true },
+          ].map((link) =>
+            link.internal ? (
+              <Link
+                key={link.label}
+                to={link.to}
+                style={{
+                  textDecoration: "none",
+                  color: "rgba(242, 236, 220, 0.65)",
+                  fontSize: "13.5px",
+                  fontWeight: "500",
+                  padding: "7px 12px",
+                  borderRadius: "8px",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.06)";
+                  e.target.style.color = "rgba(242,236,220,0.9)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = "transparent";
+                  e.target.style.color = "rgba(242,236,220,0.65)";
+                }}
+              >
+                {link.label}
+              </Link>
+            ) : (
+              <a
+                key={link.label}
+                href={link.href}
+                style={{
+                  textDecoration: "none",
+                  color: "rgba(242, 236, 220, 0.65)",
+                  fontSize: "13.5px",
+                  fontWeight: "500",
+                  padding: "7px 12px",
+                  borderRadius: "8px",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = "rgba(255,255,255,0.06)";
+                  e.target.style.color = "rgba(242,236,220,0.9)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = "transparent";
+                  e.target.style.color = "rgba(242,236,220,0.65)";
+                }}
+              >
+                {link.label}
+              </a>
+            ),
+          )}
+          <Link
+            to="/help"
+            style={{
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "#fff",
+              fontWeight: "600",
+              fontSize: "13.5px",
+              padding: "8px 16px",
+              borderRadius: "10px",
+              background: "#FF7A6B",
+              marginLeft: "6px",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#ff6b5a";
+              e.target.style.boxShadow = "0 4px 16px rgba(255,122,107,0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "#FF7A6B";
+              e.target.style.boxShadow = "none";
+            }}
+          >
+            Request Help
+          </Link>
+        </div>
+      </nav>
 
       {/* HERO */}
-      <main
+      <header
         id="top"
         style={{
           position: "relative",
@@ -290,7 +304,7 @@ export default function App() {
       >
         <video
           ref={videoRef}
-          autoPlay
+          autoPlay={isPlaying}
           muted
           playsInline
           preload="auto"
@@ -308,6 +322,65 @@ export default function App() {
         >
           <source src="/assets/hero-nokia.mp4" type="video/mp4" />
         </video>
+        <button
+          onClick={() => setIsPlaying((p) => !p)}
+          aria-label={
+            isPlaying ? "Pause background video" : "Play background video"
+          }
+          style={{
+            position: "absolute",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "44px",
+            height: "44px",
+            borderRadius: "50%",
+            background: "rgba(18, 28, 20, 0.65)",
+            backdropFilter: "blur(8px)",
+            border: "1.5px solid rgba(236, 224, 204, 0.3)",
+            color: "#F4ECDC",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255, 122, 107, 0.85)";
+            e.currentTarget.style.borderColor = "#FF7A6B";
+            e.currentTarget.style.transform = "scale(1.08)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(18, 28, 20, 0.65)";
+            e.currentTarget.style.borderColor = "rgba(236, 224, 204, 0.3)";
+            e.currentTarget.style.transform = "scale(1)";
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.outline = "3px solid #FF7A6B";
+            e.currentTarget.style.outlineOffset = "2px";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.outline = "none";
+          }}
+        >
+          {isPlaying ? (
+            /* Pause Icon */
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+            </svg>
+          ) : (
+            /* Play Icon */
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              style={{ transform: "translateX(1px)" }}
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          )}
+        </button>
         <div
           style={{
             position: "absolute",
@@ -421,6 +494,7 @@ export default function App() {
           </div>
         </div>
 
+      <main id="main-content" tabIndex="-1" style={{ outline: "none" }}>
         {/* SECTION 2 — PROBLEM */}
         <section
           style={{
@@ -1656,7 +1730,6 @@ export default function App() {
 
       {/* FOOTER */}
       <footer
-        role="contentinfo"
         style={{
           background: "#1c2c24",
           padding: "54px 0 40px",
