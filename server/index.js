@@ -220,6 +220,88 @@ app.get('/api/ranking', async (req, res) => {
   }
 })
 
+// ── User preferences API (#137) ─────────────────────────────────
+// Preferences are stored in memory keyed by Stellar wallet address.
+// On login the client fetches them here and applies them; on change the
+// client posts back. Falls back to localStorage when unauthenticated.
+const preferencesStore = new Map()
+
+const ALLOWED_PREF_KEYS = new Set([
+  'nickname', 'contact', 'gender', 'mapStyleIndex',
+  'selectedChar', 'notificationsEnabled', 'language',
+])
+
+function sanitizePreferences(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const clean = {}
+  for (const key of ALLOWED_PREF_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) {
+      clean[key] = raw[key]
+    }
+  }
+  return clean
+}
+
+function isValidStellarAddress(addr) {
+  return typeof addr === 'string' && /^G[A-Z2-7]{55}$/.test(addr)
+}
+
+app.get('/api/preferences/:address', (req, res) => {
+  const { address } = req.params
+  if (!isValidStellarAddress(address)) {
+    return res.status(400).json({ error: 'Invalid Stellar address' })
+  }
+  const prefs = preferencesStore.get(address) || {}
+  res.json({ address, preferences: prefs })
+})
+
+app.post('/api/preferences/:address', (req, res) => {
+  const { address } = req.params
+  if (!isValidStellarAddress(address)) {
+    return res.status(400).json({ error: 'Invalid Stellar address' })
+  }
+  const incoming = sanitizePreferences(req.body)
+  const existing = preferencesStore.get(address) || {}
+  const merged = { ...existing, ...incoming }
+  preferencesStore.set(address, merged)
+  res.json({ address, preferences: merged })
+})
+
+// ── Feedback / rating API (#139) ─────────────────────────────────
+// Stores post-resolution ratings (1-5 stars + optional comment) keyed
+// by requestId. Feeds into the reputation system when contract integration
+// is available; for now the data is queryable by the ranking endpoint.
+const feedbackStore = new Map()
+
+app.post('/api/feedback', (req, res) => {
+  const { requestId, responderAddress, rating, comment } = req.body
+  if (!Number.isFinite(Number(requestId))) {
+    return res.status(400).json({ error: 'Missing or invalid requestId' })
+  }
+  const ratingNum = Number(rating)
+  if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    return res.status(400).json({ error: 'rating must be 1–5' })
+  }
+  const entry = {
+    requestId: Number(requestId),
+    responderAddress: isValidStellarAddress(responderAddress) ? responderAddress : null,
+    rating: Math.round(ratingNum),
+    comment: typeof comment === 'string' ? comment.slice(0, 500) : '',
+    createdAt: new Date().toISOString(),
+  }
+  feedbackStore.set(Number(requestId), entry)
+  console.log(`[feedback] req=${requestId} rating=${entry.rating}`)
+  res.json({ success: true, entry })
+})
+
+app.get('/api/feedback/:requestId', (req, res) => {
+  const id = Number(req.params.requestId)
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid requestId' })
+  const entry = feedbackStore.get(id)
+  if (!entry) return res.status(404).json({ error: 'Not found' })
+  res.json(entry)
+})
+
 app.listen(PORT, () => {
   console.log(`ZK Prover on http://localhost:${PORT}`)
   ensureProver().catch(err => console.error('[prover] Init failed:', err))
