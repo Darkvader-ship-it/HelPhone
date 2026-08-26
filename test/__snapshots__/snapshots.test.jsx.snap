@@ -1,0 +1,830 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Component Snapshots > Help Page > should match snapshot 1`] = `
+<div
+  id="helphone-help-wrap"
+  style="display: flex; height: 100vh; font-family: "Inter", "Helvetica Neue", sans-serif;"
+>
+  <aside
+    id="helphone-help-sidebar"
+    style="width: 340px; min-width: 340px; background: rgb(35, 75, 78); color: rgba(242, 236, 220, 0.9); display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; box-shadow: 4px 0 32px rgba(0,0,0,0.25);"
+  >
+    <button
+      aria-expanded="false"
+      aria-label="Expand panel"
+      id="hp-sidebar-drag-handle"
+      style="display: none; width: 100%; padding: 12px 0px 6px; background: transparent; border: medium; cursor: pointer; flex-shrink: 0;"
+      type="button"
+    >
+      <div
+        style="width: 36px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.2); margin: 0px auto;"
+      />
+    </button>
+    <div
+      style="padding: 20px 20px 36px;"
+    >
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;"
+      >
+        <a
+          data-discover="true"
+          href="/"
+          style="font-family: "Instrument Serif", serif; font-size: 20px; text-decoration: none; display: flex;"
+        >
+          <span
+            style="color: rgb(244, 236, 220); font-style: italic;"
+          >
+            Hel
+          </span>
+          <span
+            style="color: rgb(162, 165, 134);"
+          >
+            Phone
+          </span>
+        </a>
+        <a
+          data-discover="true"
+          href="/"
+          style="font-size: 12px; color: rgba(242, 236, 220, 0.35); text-decoration: none;"
+        >
+          ← Back
+        </a>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 24px; background: rgba(0, 0, 0, 0.2); border-radius: 10px; padding: 4px;"
+      >
+        <button
+          style="padding: 10px 0px; border-radius: 7px; border: medium; background: rgb(255, 122, 107); color: rgb(255, 255, 255); font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;"
+        >
+          Get Help
+        </button>
+        <button
+          style="padding: 10px 0px; border-radius: 7px; border: medium; background: transparent; color: rgba(242, 236, 220, 0.45); font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;"
+        >
+          Offer Help
+        </button>
+      </div>
+      <div
+        style="padding: 12px 13px; border-radius: 12px; margin-bottom: 18px; background: linear-gradient(135deg, rgba(115, 87, 255, 0.16), rgba(63, 132, 135, 0.12)); border: 1px solid rgba(179, 166, 255, 0.22);"
+      >
+        <div
+          style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"
+        >
+          <span
+            style="width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: rgba(242, 236, 220, 0.28); animation: none;"
+          />
+          <span
+            style="font-size: 11px; font-weight: 900; letter-spacing: 1.25px; color: rgb(179, 166, 255);"
+          >
+            ZK PRIVACY CHECKPOINT
+          </span>
+          <span
+            style="margin-left: auto; padding: 2px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: rgba(242, 236, 220, 0.62); font-size: 9px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase;"
+          >
+            ready
+          </span>
+        </div>
+        <p
+          style="margin: 0px 0px 8px; font-size: 11px; color: rgba(242, 236, 220, 0.52); line-height: 1.45;"
+        >
+          Exact location stays private. Stellar sees a proof fingerprint, a zone, and a pseudonymous wallet action.
+        </p>
+      </div>
+      <div
+        style="margin-bottom: 20px;"
+      >
+        <h2
+          style="margin: 0px; font-family: "Instrument Serif", serif; font-weight: 400; font-size: 20px; color: rgb(244, 236, 220); line-height: 1.2;"
+        >
+          Request help nearby
+        </h2>
+        <p
+          style="margin: 0px; font-size: 12px; color: rgba(242, 236, 220, 0.4); line-height: 1.5;"
+        >
+          Fill in the steps below. Nearby people will be notified.
+        </p>
+      </div>
+      <div
+        style="margin-bottom: 6px; opacity: 1; transition: opacity 0.3s;"
+      >
+        <div
+          style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;"
+        >
+          <div
+            style="width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: rgb(255, 122, 107); border: 2px solid rgb(255, 122, 107); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: rgb(255, 255, 255);"
+          >
+            1
+          </div>
+          <div>
+            <div
+              style="font-size: 13px; font-weight: 600; color: rgba(242, 236, 220, 0.95);"
+            >
+              Your location
+            </div>
+            <div
+              style="font-size: 11px; color: rgba(242, 236, 220, 0.35); margin-top: 1px;"
+            >
+              Not set
+            </div>
+          </div>
+        </div>
+        <div
+          style="margin-left: 36px;"
+        >
+          <p
+            style="font-size: 12px; color: rgb(255, 122, 107); margin: 0px 0px 8px; line-height: 1.4;"
+          >
+            Browser does not support geolocation. Search by city.
+          </p>
+          <button
+            style="padding: 8px 12px; background: rgba(255, 255, 255, 0.08); color: rgba(242, 236, 220, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; font-size: 12px; cursor: pointer; width: 100%; margin-bottom: 8px;"
+          >
+            Allow location access
+          </button>
+          <form
+            style="display: flex; gap: 6px; position: relative;"
+          >
+            <input
+              aria-autocomplete="list"
+              aria-controls="hp-search-suggestions"
+              aria-expanded="false"
+              aria-haspopup="listbox"
+              autocomplete="off"
+              placeholder="Or search city, country…"
+              role="combobox"
+              style="width: 100%; padding: 9px 11px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: rgba(242, 236, 220, 0.9); font-size: 13px; outline: none; box-sizing: border-box;"
+              value=""
+            />
+            <button
+              style="padding: 9px 12px; background: rgb(255, 122, 107); color: rgb(255, 255, 255); border: medium; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;"
+              type="submit"
+            >
+              Go
+            </button>
+          </form>
+          <p
+            style="font-size: 11px; color: rgba(242, 236, 220, 0.3); margin: 6px 0px 0px;"
+          >
+            You can also click the map to drop a pin.
+          </p>
+        </div>
+      </div>
+      <div
+        style="margin-bottom: 6px; opacity: 0.38; transition: opacity 0.3s;"
+      >
+        <div
+          style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;"
+        >
+          <div
+            style="width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: rgba(242, 236, 220, 0.4);"
+          >
+            2
+          </div>
+          <div>
+            <div
+              style="font-size: 13px; font-weight: 600; color: rgba(242, 236, 220, 0.45);"
+            >
+              What happened?
+            </div>
+            <div
+              style="font-size: 11px; color: rgba(242, 236, 220, 0.35); margin-top: 1px;"
+            >
+              Select one
+            </div>
+          </div>
+        </div>
+        <div
+          style="margin-left: 36px;"
+        >
+          <button
+            style="padding: 8px 12px; background: rgba(255, 255, 255, 0.08); color: rgba(242, 236, 220, 0.8); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; font-size: 12px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: space-between;"
+          >
+            <span>
+              Pick a type
+            </span>
+            <span
+              style="font-size: 16px; opacity: 0.5;"
+            >
+              ›
+            </span>
+          </button>
+        </div>
+      </div>
+      <div
+        style="margin-bottom: 6px; opacity: 1; transition: opacity 0.3s;"
+      >
+        <div
+          style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;"
+        >
+          <div
+            style="width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: rgb(63, 132, 135); border: 2px solid rgb(63, 132, 135); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: rgb(255, 255, 255);"
+          >
+            ✓
+          </div>
+          <div>
+            <div
+              style="font-size: 13px; font-weight: 600; color: rgb(63, 132, 135);"
+            >
+              Your info
+            </div>
+            <div
+              style="font-size: 11px; color: rgba(242, 236, 220, 0.35); margin-top: 1px;"
+            >
+               · 
+            </div>
+          </div>
+        </div>
+        <div
+          style="margin-left: 36px;"
+        >
+          <div
+            style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;"
+          >
+            <input
+              maxlength="30"
+              placeholder="Nickname or name"
+              style="width: 100%; padding: 9px 11px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: rgba(242, 236, 220, 0.9); font-size: 13px; outline: none; box-sizing: border-box;"
+              value=""
+            />
+            <input
+              maxlength="40"
+              placeholder="@telegram or +54 11 5555-5555"
+              style="width: 100%; padding: 9px 11px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: rgba(242, 236, 220, 0.9); font-size: 13px; outline: none; box-sizing: border-box;"
+              value=""
+            />
+            <div
+              style="font-size: 9.5px; color: rgba(242, 236, 220, 0.18); line-height: 1.4;"
+            >
+              How responders reach you. Stored on-chain.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        style="margin-bottom: 6px; opacity: 0.38; transition: opacity 0.3s;"
+      >
+        <div
+          style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;"
+        >
+          <div
+            style="width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: rgba(242, 236, 220, 0.4);"
+          >
+            4
+          </div>
+          <div>
+            <div
+              style="font-size: 13px; font-weight: 600; color: rgba(242, 236, 220, 0.45);"
+            >
+              Send request
+            </div>
+            <div
+              style="font-size: 11px; color: rgba(242, 236, 220, 0.35); margin-top: 1px;"
+            >
+              Complete the steps above
+            </div>
+          </div>
+        </div>
+        <div
+          style="margin-left: 36px;"
+        >
+          <p
+            style="font-size: 11px; color: rgba(242, 236, 220, 0.35); margin: 0px 0px 10px; line-height: 1.5;"
+          >
+            Your pin appears on the map. People nearby will see your request and reach out.
+          </p>
+          <button
+            disabled=""
+            style="width: 100%; padding: 13px; background: rgba(255, 255, 255, 0.08); color: rgba(242, 236, 220, 0.25); border: medium; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: default; opacity: 1; transition: all 0.2s;"
+          >
+            Connect wallet first
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div
+    id="helphone-help-map"
+    style="flex: 1 1 0%; position: relative;"
+  >
+    <div
+      style="position: relative; width: 100%; height: 100%;"
+    />
+    <div
+      style="position: absolute; top: 12px; left: 12px; z-index: 10;"
+    >
+      <button
+        style="padding: 7px 14px; background: rgb(35, 75, 78); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; color: rgba(242, 236, 220, 0.85); font-size: 12px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 7px; box-shadow: 0 4px 16px rgba(0,0,0,0.3);"
+      >
+        <span
+          style="width: 7px; height: 7px; border-radius: 50%; background: rgb(115, 87, 255); flex-shrink: 0;"
+        />
+        Warm
+         
+        <span
+          style="opacity: 0.5;"
+        >
+          ▾
+        </span>
+      </button>
+    </div>
+    <button
+      aria-label="Open HelPhone help guide"
+      style="position: absolute; top: 12px; right: 68px; z-index: 10; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.12); background: rgb(35, 75, 78); color: rgb(244, 236, 220); font-size: 18px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3); backdrop-filter: blur(8px);"
+      type="button"
+    >
+      ?
+    </button>
+    <div
+      style="position: absolute; top: 12px; right: 12px; z-index: 10;"
+    >
+      <button
+        aria-label="Connect Wallet"
+        style="width: 44px; height: 44px; border-radius: 50%; padding: 0px; cursor: pointer; background: rgba(35, 75, 78, 0.55); border: 2px solid rgba(255, 255, 255, 0.12); overflow: hidden; backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;"
+      >
+        <svg
+          fill="none"
+          height="18"
+          stroke="rgba(242,236,220,0.5)"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          viewBox="0 0 24 24"
+          width="18"
+        >
+          <circle
+            cx="12"
+            cy="8"
+            r="4"
+          />
+          <path
+            d="M4 21c0-4 3.6-7 8-7s8 3 8 7"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      style="position: fixed; inset: 0px; z-index: 10000; background: rgba(0, 0, 0, 0.72); display: flex; align-items: center; justify-content: center; padding: 18px;"
+    >
+      <div
+        aria-labelledby="help-onboarding-title"
+        aria-modal="true"
+        role="dialog"
+        style="width: 100%; max-width: 460px; border-radius: 18px; background: rgb(28, 44, 36); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 24px 80px rgba(0,0,0,0.62); overflow: hidden; transition: opacity 0.25s; outline: none;"
+        tabindex="-1"
+      >
+        <div
+          style="padding: 18px 20px 0px; display: flex; justify-content: space-between; align-items: center; gap: 12px;"
+        >
+          <div
+            style="font-size: 10px; letter-spacing: 1.4px; color: rgb(127, 184, 186); font-weight: 900;"
+          >
+            HELPHONE GUIDE
+          </div>
+          <button
+            aria-label="Close guide"
+            style="width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.05); color: rgba(242, 236, 220, 0.65); cursor: pointer; font-size: 18px; line-height: 1;"
+            type="button"
+          >
+            x
+          </button>
+        </div>
+        <div
+          style="padding: 14px 24px 0px; display: flex; gap: 8px; align-items: center;"
+        >
+          <div
+            style="flex: 1 1 0%; height: 4px; border-radius: 4px; background: rgb(255, 122, 107); transition: background 0.3s;"
+          />
+          <div
+            style="flex: 1 1 0%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); transition: background 0.3s;"
+          />
+          <div
+            style="flex: 1 1 0%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); transition: background 0.3s;"
+          />
+          <div
+            style="flex: 1 1 0%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); transition: background 0.3s;"
+          />
+          <div
+            style="flex: 1 1 0%; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); transition: background 0.3s;"
+          />
+        </div>
+        <div
+          style="padding: 26px 24px 8px; text-align: center;"
+        >
+          <div
+            style="display: inline-flex; align-items: center; justify-content: center; min-width: 74px; height: 34px; padding: 0px 12px; border-radius: 999px; background: rgba(63, 132, 135, 0.14); border: 1px solid rgba(63, 132, 135, 0.28); color: rgb(127, 184, 186); font-size: 11px; font-weight: 900; letter-spacing: 1px; margin-bottom: 16px;"
+          >
+            1
+            /
+            5
+             · 
+            Welcome
+          </div>
+          <h2
+            id="help-onboarding-title"
+            style="margin: 0px 0px 10px; color: rgb(244, 236, 220); font-size: 22px; line-height: 1.15; font-weight: 700;"
+          >
+            HelPhone keeps you safe
+          </h2>
+          <p
+            style="margin: 0px; color: rgba(242, 236, 220, 0.55); font-size: 14px; line-height: 1.6; padding: 0px 6px;"
+          >
+            HelPhone is a peer-to-peer emergency network built on Stellar. Real people nearby respond to real emergencies — no call centres, no hold music.
+          </p>
+        </div>
+        <div
+          style="padding: 24px; display: flex; gap: 10px;"
+        >
+          <button
+            style="flex: 1 1 0%; min-height: 48px; border-radius: 10px; border: medium; background: rgb(255, 122, 107); color: rgb(255, 255, 255); font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s;"
+            type="button"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      id="hp-hint-overlay"
+      style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgb(35, 75, 78); color: rgba(242, 236, 220, 0.8); padding: 10px 18px; border-radius: 24px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.25); pointer-events: none; z-index: 999; white-space: nowrap;"
+    >
+      Allow location or click map to drop your pin
+    </div>
+    <button
+      id="hp-mobile-form-toggle"
+      style="position: absolute; bottom: 20px; right: 20px; z-index: 100; width: 50px; height: 50px; border-radius: 50%; padding: 0px; background: rgb(255, 122, 107); border: medium; cursor: pointer; box-shadow: 0 4px 20px rgba(255,122,107,0.5); display: none; align-items: center; justify-content: center;"
+    >
+      <svg
+        fill="none"
+        height="20"
+        stroke="#fff"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="20"
+      >
+        <polyline
+          points="6 9 12 15 18 9"
+        />
+      </svg>
+    </button>
+  </div>
+  <style>
+    
+        @media (max-width: 768px) {
+          #helphone-help-wrap {
+            position: relative;
+            overflow-x: hidden;
+            max-width: 100vw;
+          }
+          #helphone-help-sidebar {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-height: 80vh !important;
+            border-radius: 20px 20px 0 0 !important;
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.45) !important;
+            transform: translateY(calc(100% - 96px)) !important;
+            transition: transform 0.35s cubic-bezier(0.22, 0.75, 0.2, 1) !important;
+            z-index: 2000 !important;
+            overscroll-behavior: contain !important;
+          }
+          #helphone-help-sidebar.hp-mobile-open {
+            transform: translateY(0) !important;
+          }
+          #helphone-help-sidebar::before {
+            content: none;
+          }
+          #hp-sidebar-drag-handle {
+            display: flex !important;
+          }
+          #helphone-help-map {
+            height: 100vh !important;
+            flex: none !important;
+            width: 100vw !important;
+          }
+          #hp-mobile-form-toggle { display: flex !important; bottom: 108px !important; }
+          #helphone-help-sidebar &gt; div:not(#hp-sidebar-drag-handle) { padding-top: 6px !important; }
+          #hp-hint-overlay {
+            bottom: 108px !important;
+            font-size: 12px !important;
+            padding: 8px 14px !important;
+            max-width: calc(100vw - 40px) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+        }
+        @media (max-width: 480px) {
+          #helphone-help-sidebar {
+            max-height: 88vh !important;
+          }
+        }
+      
+  </style>
+</div>
+`;
+
+exports[`Component Snapshots > Ranking Page > should match snapshot 1`] = `
+<div
+  style="min-height: 100vh; background: rgb(236, 224, 204); font-family: "Inter", "Helvetica Neue", sans-serif;"
+>
+  <nav
+    style="background: rgb(35, 75, 78); padding: 16px 32px; display: flex; align-items: center; gap: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.2);"
+  >
+    <a
+      data-discover="true"
+      href="/"
+      style="font-family: "Instrument Serif", serif; font-size: 20px; text-decoration: none; display: flex;"
+    >
+      <span
+        style="color: rgb(244, 236, 220); font-style: italic;"
+      >
+        Hel
+      </span>
+      <span
+        style="color: rgb(162, 165, 134);"
+      >
+        Phone
+      </span>
+    </a>
+    <a
+      data-discover="true"
+      href="/"
+      style="font-size: 13px; color: rgba(242, 236, 220, 0.6); text-decoration: none;"
+    >
+      ← Back to home
+    </a>
+  </nav>
+  <div
+    style="max-width: 860px; margin: 0px auto; padding: 60px 24px 80px;"
+  >
+    <div
+      style="margin-bottom: 40px;"
+    >
+      <div
+        style="font-size: 11px; letter-spacing: 3px; font-weight: 600; color: rgb(63, 132, 135); margin-bottom: 12px;"
+      >
+        HELPHONE NETWORK
+      </div>
+      <h1
+        style="font-family: "Instrument Serif", serif; font-weight: 400; color: rgb(35, 75, 78); line-height: 1.05; margin: 0px 0px 8px;"
+      >
+        Community Responders
+      </h1>
+      <p
+        style="font-size: 16px; color: rgb(122, 114, 100); margin: 0px;"
+      >
+        The people who show up when it matters.
+      </p>
+    </div>
+    <div
+      style="display: flex; gap: 8px; margin-bottom: 32px;"
+    >
+      <button
+        style="padding: 8px 18px; border-radius: 20px; border: 1.5px solid rgba(35, 75, 78, 0.2); background: transparent; color: rgb(35, 75, 78); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;"
+      >
+        This Week
+      </button>
+      <button
+        style="padding: 8px 18px; border-radius: 20px; border: 1.5px solid rgba(35, 75, 78, 0.2); background: transparent; color: rgb(35, 75, 78); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;"
+      >
+        This Month
+      </button>
+      <button
+        style="padding: 8px 18px; border-radius: 20px; border: 1.5px solid rgb(63, 132, 135); background: rgb(63, 132, 135); color: rgb(255, 255, 255); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;"
+      >
+        All Time
+      </button>
+    </div>
+    <div
+      style="background: rgb(255, 255, 255); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(35,75,78,0.08);"
+    >
+      <style>
+        
+@keyframes hp-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+      </style>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 14px 20px; border-bottom: 1px solid rgb(232, 224, 208); font-size: 11px; letter-spacing: 1.5px; font-weight: 600; color: rgb(162, 165, 134);"
+      >
+        <span>
+          #
+        </span>
+        <span>
+          RESPONDER
+        </span>
+        <span
+          style="text-align: center;"
+        >
+          ARRIVALS
+        </span>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+      <div
+        style="display: grid; grid-template-columns: 48px 1fr 100px; padding: 16px 20px; border-bottom: 1px solid rgb(240, 232, 216); align-items: center; background: rgb(255, 255, 255);"
+      >
+        <div
+          style="width: 24px; height: 18px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+        />
+        <div
+          style="display: flex; align-items: center; gap: 10px;"
+        >
+          <div
+            style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite; flex-shrink: 0;"
+          />
+          <div
+            style="width: 100px; height: 14px; border-radius: 4px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+        <div
+          style="text-align: center;"
+        >
+          <div
+            style="display: inline-block; width: 40px; height: 24px; border-radius: 12px; background: linear-gradient(90deg, rgb(238, 238, 238) 0px, rgb(224, 224, 224) 40px, rgb(238, 238, 238) 80px); animation: hp-shimmer 1.6s ease-in-out infinite;"
+          />
+        </div>
+      </div>
+    </div>
+    <p
+      style="font-size: 12px; color: rgb(162, 165, 134); margin-top: 24px; text-align: center;"
+    >
+      On-chain leaderboard · 
+      0
+       responders
+    </p>
+  </div>
+</div>
+`;
