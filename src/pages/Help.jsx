@@ -31,6 +31,7 @@ import {
   cancelRequest,
   getRanking,
   ensureAccountFunded,
+  getWalletBalances,
   updateLocation,
   recordExpertVerification,
   subscribeToContractEvents,
@@ -3097,6 +3098,30 @@ export default function Help() {
   }, [activeWalletAddress]);
 
   useEffect(() => {
+    if (!activeWalletAddress) {
+      setWalletBalances([]);
+      setWalletBalanceStatus("idle");
+      return;
+    }
+
+    const token = cancellationToken();
+    setWalletBalanceStatus("loading");
+    token
+      .wrap(getWalletBalances(activeWalletAddress))
+      .then((balances) => {
+        if (!token.active || !balances) return;
+        setWalletBalances(balances);
+        setWalletBalanceStatus("ready");
+      })
+      .catch(() => {
+        if (!token.active) return;
+        setWalletBalances([]);
+        setWalletBalanceStatus("error");
+      });
+
+    return () => token.cancel();
+  }, [activeWalletAddress]);
+  useEffect(() => {
     setTrackingRequestId(null);
     setTrackingIndex(null);
     setResponderArrived(false);
@@ -5104,6 +5129,39 @@ export default function Help() {
                       }}
                     >
                       {displayAddress}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          letterSpacing: "1.4px",
+                          color: "rgba(242,236,220,0.32)",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        WALLET BALANCE
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          color: "rgba(242,236,220,0.76)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {walletBalanceStatus === "loading"
+                          ? "Loading..."
+                          : walletBalanceStatus === "error"
+                            ? "Balance unavailable"
+                            : `${(walletBalances.find((balance) => balance.asset === "XLM")?.balance ?? 0).toFixed(2)} XLM`}
+                      </div>
                     </div>
                   </div>
                   <button
