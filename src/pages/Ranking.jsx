@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { getRanking } from '../lib/contract'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const PERIODS = Object.freeze(['This Week', 'This Month', 'All Time'])
 
@@ -57,6 +58,7 @@ function SkeletonRow() {
 }
 
 export default function Ranking() {
+  useDocumentTitle('Ranking')
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('All Time')

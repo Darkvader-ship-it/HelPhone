@@ -41,6 +41,7 @@ import {
   generateLocationProof,
   shortProofId,
 } from "../lib/zk";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -2128,6 +2129,7 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
 }
 
 export default function Help() {
+  useDocumentTitle("Help");
   const [mode, setMode] = useState("get");
 
   const [profile, setProfile] = useState(() => {
