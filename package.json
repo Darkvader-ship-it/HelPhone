@@ -13,7 +13,10 @@
     "preview": "vite preview",
     "prepare": "husky",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:a11y": "vitest run test/a11y-components.test.jsx",
+    "test:e2e": "playwright test",
+    "test:e2e:a11y": "playwright test tests/e2e/a11y.spec.ts"
   },
   "lint-staged": {
     "*.{js,jsx}": [
@@ -30,6 +33,7 @@
     "node": "22.x"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
