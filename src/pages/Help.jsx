@@ -3369,6 +3369,8 @@ export default function Help() {
       <aside
         ref={sidebarRef}
         id="helphone-help-sidebar"
+        role="complementary"
+        aria-label="Request panel"
         style={{
           width: "340px",
           minWidth: "340px",
@@ -4856,7 +4858,11 @@ export default function Help() {
         </div>
       </aside>
 
-      <div id="helphone-help-map" style={{ flex: 1, position: "relative" }}>
+      <main
+        id="helphone-help-map"
+        aria-label="Emergency map"
+        style={{ flex: 1, position: "relative" }}
+      >
         <Map
           mapboxAccessToken={MAPBOX_TOKEN}
           initialViewState={{
@@ -5682,7 +5688,7 @@ export default function Help() {
             )}
           </svg>
         </button>
-      </div>
+      </main>
 
       <ArrivalThanksModal
         open={arrivalThanksOpen}
