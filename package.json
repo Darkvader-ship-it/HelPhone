@@ -11,11 +11,19 @@
     "dev:all": "node scripts/dev.mjs",
     "build": "vite build",
     "preview": "vite preview",
+    "prepare": "husky",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:a11y": "vitest run test/a11y-components.test.jsx",
     "test:e2e": "playwright test",
     "test:e2e:a11y": "playwright test tests/e2e/a11y.spec.ts"
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,md,json}": "prettier --write"
   },
   "keywords": [],
   "author": "",
@@ -29,9 +37,11 @@
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.2",
-    "axe-core": "^4.13.0",
-    "jest-axe": "^11.0.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
     "jsdom": "^29.1.1",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
     "vite": "^8.0.16",
     "vitest": "^4.1.10"
   },

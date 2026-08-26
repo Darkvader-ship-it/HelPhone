@@ -629,6 +629,191 @@ function Step({ n, title, subtitle, done, active, children }) {
   );
 }
 
+// ── Post-resolution feedback modal (#139) ────────────────────────────────────
+export function FeedbackModal({ open, onClose, onSubmit }) {
+  const [rating, setRating] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (open) { setRating(0); setHovered(0); setComment(""); setSubmitted(false); }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const prev = document.activeElement;
+    dialogRef.current?.focus();
+    function handleKey(e) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      if (prev instanceof HTMLElement) prev.focus();
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  async function handleSubmit() {
+    if (rating === 0) return;
+    await onSubmit({ rating, comment });
+    setSubmitted(true);
+    setTimeout(onClose, 1400);
+  }
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feedback-modal-title"
+        tabIndex={-1}
+        style={{ width: "100%", maxWidth: "420px", borderRadius: "18px", background: "#1c2c24", border: "1px solid rgba(255,255,255,0.1)", padding: "28px 24px 24px", outline: "none" }}
+      >
+        {submitted ? (
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>✓</div>
+            <p style={{ color: "#F4ECDC", fontWeight: 700, margin: 0 }}>Thanks for your feedback!</p>
+          </div>
+        ) : (
+          <>
+            <h2 id="feedback-modal-title" style={{ margin: "0 0 6px", color: "#F4ECDC", fontSize: "20px", fontWeight: 700 }}>
+              Rate your responder
+            </h2>
+            <p style={{ margin: "0 0 20px", color: "rgba(242,236,220,0.55)", fontSize: "13px", lineHeight: 1.55 }}>
+              Your rating builds on-chain reputation for responders who show up.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "20px" }} role="group" aria-label="Star rating">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  aria-label={`${star} star${star > 1 ? "s" : ""}`}
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHovered(star)}
+                  onMouseLeave={() => setHovered(0)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "32px", color: star <= (hovered || rating) ? "#FF7A6B" : "rgba(255,255,255,0.15)", transition: "color 0.15s" }}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              maxLength={500}
+              placeholder="Optional comment…"
+              rows={3}
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "#F4ECDC", fontSize: "13px", padding: "10px 12px", resize: "vertical", outline: "none", marginBottom: "16px" }}
+            />
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button type="button" onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(242,236,220,0.65)", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={rating === 0}
+                style={{ flex: 2, padding: "12px", borderRadius: "10px", border: "none", background: rating > 0 ? "#FF7A6B" : "rgba(255,122,107,0.3)", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: rating > 0 ? "pointer" : "not-allowed", transition: "background 0.2s" }}
+              >
+                Submit rating
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Emergency category map markers (#140) ─────────────────────────────────────
+// Renders a distinct SVG pin per emergency type so responders can visually
+// scan the map without opening each popup. Falls back to the generic marker
+// colour if the type isn't in ET_ICONS.
+const ET_COLORS = Object.freeze({
+  lost: "#7357FF",
+  fallen: "#FF7A6B",
+  medical: "#e53e3e",
+  car: "#d69e2e",
+  danger: "#9b2335",
+  other: "#3F8487",
+});
+
+export function EmergencyMarker({ lat, lng, emergencyType, onClick, children }) {
+  const color = ET_COLORS[emergencyType] || "#FF7A6B";
+  const icon = ET_ICONS[emergencyType] || ET_ICONS.other;
+  return (
+    <Marker latitude={lat} longitude={lng} onClick={onClick}>
+      <div style={{ position: "relative", cursor: "pointer" }}>
+        <svg width="36" height="44" viewBox="0 0 36 44" fill="none" aria-label={emergencyType || "emergency"}>
+          <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill={color} />
+          <circle cx="18" cy="18" r="13" fill="rgba(0,0,0,0.25)" />
+        </svg>
+        <div style={{ position: "absolute", top: "7px", left: "8px", color: "#fff" }}>
+          {icon}
+        </div>
+        {children}
+      </div>
+    </Marker>
+  );
+}
+
+export function MapLegend() {
+  return (
+    <div
+      aria-label="Map legend"
+      style={{ position: "absolute", bottom: "48px", right: "12px", zIndex: 100, background: "rgba(20,32,28,0.92)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 12px", minWidth: "148px" }}
+    >
+      <div style={{ fontSize: "9px", letterSpacing: "1.2px", color: "#7fb8ba", fontWeight: 900, marginBottom: "8px" }}>EMERGENCY TYPES</div>
+      {EMERGENCY_TYPES.filter((et) => et.id !== "other").map((et) => (
+        <div key={et.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+          <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: ET_COLORS[et.id] || "#FF7A6B", flexShrink: 0 }} />
+          <span style={{ fontSize: "11px", color: "rgba(242,236,220,0.75)" }}>{et.icon} {et.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Onboarding tour steps (#138) ──────────────────────────────────────────────
+// Exported so tests can assert the shape without mounting the component.
+// Each step renders in the HelpOnboardingModal progress-bar wizard.
+// The last step MUST have isLast:true — the modal uses this to switch
+// the CTA from "Next" to "Connect preferred wallet".
+export const HELP_ONBOARDING_STEPS = Object.freeze([
+  {
+    label: "Welcome",
+    title: "HelPhone keeps you safe",
+    body: "HelPhone is a peer-to-peer emergency network built on Stellar. Real people nearby respond to real emergencies — no call centres, no hold music.",
+  },
+  {
+    label: "Wallet",
+    title: "Connect your Stellar wallet",
+    body: "Your wallet is your identity on HelPhone. It proves you're human (via a funded Stellar account) and records every arrival on-chain so responders earn verifiable reputation.",
+  },
+  {
+    label: "Map",
+    title: "The map shows who needs help",
+    body: "Switch to Offer mode to see open emergency requests near you. Each pin shows the type of emergency — medical, car trouble, unsafe situation, and more. Tap a pin to see details and offer help.",
+  },
+  {
+    label: "Request",
+    title: "Need help? Tap 'Get help'",
+    body: "Pick your emergency type, share your location, and post a request. Nearby responders are notified immediately. Your precise coordinates are never stored — only an anonymised zone.",
+  },
+  {
+    label: "Privacy",
+    title: "Zero-knowledge privacy",
+    body: "HelPhone uses ZK proofs to verify your location and humanity without revealing private data. Your exact position stays on your device. Only the proof goes on-chain.",
+    isLast: true,
+  },
+]);
+
 export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
   const [step, setStep] = useState(0);
   const dialogRef = useRef(null);
@@ -1788,7 +1973,16 @@ export default function Help() {
 
   const [emergencyType, setEmergencyType] = useState(null);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return localStorage.getItem("hp_tour_done") !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackRequestId, setFeedbackRequestId] = useState(null);
+  const [feedbackResponderAddress, setFeedbackResponderAddress] = useState(null);
 
   const [location, setLocation] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -1964,6 +2158,36 @@ export default function Help() {
   useEffect(() => {
     localStorage.setItem("hp_profile", JSON.stringify(profile));
   }, [profile]);
+
+  // (#137) Sync preferences to the backend when the wallet is connected.
+  // On wallet connect: load server prefs and merge over localStorage.
+  // On profile change: push latest prefs to the server.
+  const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+  useEffect(() => {
+    if (!activeWalletAddress) return;
+    fetch(`${SERVER_BASE}/api/preferences/${activeWalletAddress}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.preferences && Object.keys(data.preferences).length > 0) {
+          setProfile((prev) => ({ ...prev, ...data.preferences }));
+        }
+      })
+      .catch(() => {});
+  }, [activeWalletAddress]);
+
+  useEffect(() => {
+    if (!activeWalletAddress) return;
+    const prefs = {
+      nickname: profile.nickname,
+      contact: profile.contact,
+      gender: profile.gender,
+    };
+    fetch(`${SERVER_BASE}/api/preferences/${activeWalletAddress}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(prefs),
+    }).catch(() => {});
+  }, [activeWalletAddress, profile.nickname, profile.contact, profile.gender]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -4526,12 +4750,11 @@ export default function Help() {
 
           {!isGetMode &&
             openRequestsArray.map((req) => (
-              <CharMarker
+              <EmergencyMarker
                 key={req.id}
-                charName={pickChar("default", req.id)}
-                accentColor="#FF7A6B"
                 lat={req.lat}
                 lng={req.lng}
+                emergencyType={req.emergency_type}
                 onClick={() => {
                   setSelectedRequest(req);
                   setPopupMarker(`req-${req.id}`);
@@ -4549,11 +4772,11 @@ export default function Help() {
                     </strong>
                     <br />
                     <span style={{ fontSize: "11px", color: "#a2a586" }}>
-                      Needs help · Click sidebar to respond
+                      {EMERGENCY_TYPES.find((e) => e.id === req.emergency_type)?.label || "Needs help"} · Click sidebar to respond
                     </span>
                   </Popup>
                 )}
-              </CharMarker>
+              </EmergencyMarker>
             ))}
 
           {showTracking && isGetMode && responders[0] && (
@@ -4576,6 +4799,9 @@ export default function Help() {
                     StellarWalletsKit,
                   );
                   setRequestStatus("Resolved");
+                  setFeedbackRequestId(requestId);
+                  setFeedbackResponderAddress(responders[0]?.responder || null);
+                  setShowFeedback(true);
                 } catch (err) {
                   alert("Could not resolve: " + (err.message || ""));
                 }
@@ -5075,7 +5301,10 @@ export default function Help() {
 
         <HelpOnboardingModal
           open={showOnboarding}
-          onClose={() => setShowOnboarding(false)}
+          onClose={() => {
+            setShowOnboarding(false);
+            try { localStorage.setItem("hp_tour_done", "1"); } catch {}
+          }}
           onConnectWallet={() => promptWalletConnection()}
         />
 
@@ -5085,6 +5314,23 @@ export default function Help() {
           selected={selectedChar}
           onSelect={setSelectedChar}
         />
+
+        <FeedbackModal
+          open={showFeedback}
+          onClose={() => setShowFeedback(false)}
+          onSubmit={async ({ rating, comment }) => {
+            const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+            try {
+              await fetch(`${SERVER_BASE}/api/feedback`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ requestId: feedbackRequestId, responderAddress: feedbackResponderAddress, rating, comment }),
+              });
+            } catch {}
+          }}
+        />
+
+        {!isGetMode && <MapLegend />}
 
         {!location && (
           <div
