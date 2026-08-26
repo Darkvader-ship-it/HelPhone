@@ -493,7 +493,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      </header>
 
       <main id="main-content" tabIndex="-1" style={{ outline: "none" }}>
         {/* SECTION 2 — PROBLEM */}
