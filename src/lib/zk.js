@@ -1,4 +1,5 @@
 import { StrKey } from '@stellar/stellar-sdk'
+import { selectProvers } from './provers'
 
 let _noir = null
 let _backend = null
@@ -386,16 +387,50 @@ function buildCampaignPrefix(publicInputsBytes) {
  * @param {{ lat: number, lng: number, campaignId?: string, recipientAddress: string, zone?: object }} opts
  * @returns {{ proof: Uint8Array, publicInputsBytes: Uint8Array, nullifier: string }}
  */
+/**
+ * Runs the in-browser proof under the module-level single-flight lock: a
+ * second concurrent call awaits the first proof instead of starting another.
+ * Extracted from {@link generateLocationProof} so it can be handed to
+ * {@link BrowserProver} as its `run` implementation — behaviour is identical
+ * to the previous inline block.
+ */
+function _browserProofSingleFlight(args) {
+  if (_proofLock) {
+    args.onLog('Proof already in progress — waiting for it to complete')
+    return _proofLock
+  }
+
+  _proofLock = _browserProof(args)
+
+  return _proofLock.finally(() => {
+    _proofLock = null
+  })
+}
+
 export async function generateLocationProof({ lat, lng, campaignId = '1', recipientAddress, zone, onLog = () => {} }) {
   const proverUrl = resolveProverUrl()
   const allowBrowserFallback = import.meta.env.VITE_ZK_BROWSER_FALLBACK === 'true'
   const proofZone = normalizeZone(zone)
+  const args = { lat, lng, campaignId, recipientAddress, zone: proofZone, onLog }
 
-  if (proverUrl) {
+  // #86 — dispatch through the prover strategy instead of an inline branch.
+  // selectProvers() returns [ServerProver, BrowserProver] when a prover URL
+  // is configured, or [BrowserProver] when it is not.
+  const provers = selectProvers({
+    proverUrl,
+    allowBrowserFallback,
+    requestServerProof: _requestServerProof,
+    runBrowserProof: _browserProofSingleFlight,
+  })
+
+  const server = provers.find((p) => p.name === 'server')
+  const browser = provers.find((p) => p.name === 'browser')
+
+  if (server) {
     try {
-      return await _requestServerProof({ lat, lng, campaignId, recipientAddress, zone: proofZone, onLog, proverUrl })
+      return await server.generate(args)
     } catch (err) {
-      if (!allowBrowserFallback) {
+      if (!browser.isAvailable()) {
         onLog('ZK prover server is not available')
         const hint = import.meta.env.PROD
           ? 'Set VITE_ZK_PROVER_URL to your hosted ZK prover (see README → Deploy).'
@@ -406,18 +441,7 @@ export async function generateLocationProof({ lat, lng, campaignId = '1', recipi
     }
   }
 
-  if (_proofLock) {
-    onLog('Proof already in progress — waiting for it to complete')
-    return _proofLock
-  }
-
-  _proofLock = _browserProof({ lat, lng, campaignId, recipientAddress, zone: proofZone, onLog })
-
-  try {
-    return await _proofLock
-  } finally {
-    _proofLock = null
-  }
+  return browser.generate(args)
 }
 
 function resolveProverUrl() {
