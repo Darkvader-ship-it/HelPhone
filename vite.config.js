@@ -2,10 +2,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 export default defineConfig({
   plugins: [
     react(),
+    visualizer({
+      open: false,
+      filename: 'dist/stats.html',
+      template: 'sunburst',
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       strategies: 'injectManifest',
@@ -128,7 +134,16 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 70000,
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mapbox: ['mapbox-gl', 'react-map-gl'],
+          stellar: ['@stellar/stellar-sdk', '@creit-tech/stellar-wallets-kit'],
+          zk: ['@noir-lang/noir_js', '@aztec/bb.js'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,
