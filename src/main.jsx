@@ -1,19 +1,15 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useEffect } from "react";
-import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";
-import {
-  Networks,
-  SwkAppDarkTheme,
-} from "@creit-tech/stellar-wallets-kit/types";
-import { defaultModules } from "@creit-tech/stellar-wallets-kit/modules/utils";
-import App from "./App.jsx";
-import Help from "./pages/Help.jsx";
-import Ranking from "./pages/Ranking.jsx";
-import Admin from "./pages/Admin.jsx";
-import VaultDashboard from "./pages/VaultDashboard.jsx";
-import "./App.css";
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit/sdk'
+import { Networks, SwkAppDarkTheme } from '@creit-tech/stellar-wallets-kit/types'
+import { defaultModules } from '@creit-tech/stellar-wallets-kit/modules/utils'
+import App from './App.jsx'
+import Help from './pages/Help.jsx'
+import Ranking from './pages/Ranking.jsx'
+import Breadcrumb from './components/Breadcrumb.jsx'
+import './App.css'
 
 const WALLET_ICON_PATHS = {
   albedo: "/assets/wallets/albedo.png",
@@ -78,7 +74,7 @@ StellarWalletsKit.init({
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
-      <RouteChangeTracker />
+      <Breadcrumb />
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/help" element={<Help />} />

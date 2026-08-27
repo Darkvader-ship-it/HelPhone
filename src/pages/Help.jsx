@@ -29,6 +29,9 @@ import {
   updateLocation,
   recordExpertVerification,
   subscribeToContractEvents,
+  saveWalletAddress,
+  loadWalletAddress,
+  clearWalletAddress,
 } from "../lib/contract";
 import {
   buildLocationProofZone,
@@ -1857,6 +1860,33 @@ export function sanitizeWalletAddress(raw) {
   return addr;
 }
 
+// ── Contact validation (#158) ──────────────────────────────────────────────
+// Enforces strict regex validation for phone numbers or specific handles
+// to prevent bad data or injection attacks.
+
+const PHONE_REGEX = /^\+?[1-9]\d{1,14}$/;
+const TELEGRAM_REGEX = /^@[A-Za-z0-9_]{5,32}$/;
+const CONTACT_ALLOWLIST = [PHONE_REGEX, TELEGRAM_REGEX];
+
+/**
+ * Validate a contact field value against the allowlist.
+ * Returns { valid, error } where error is a user-facing message.
+ * Empty strings are treated as valid (contact is optional).
+ */
+export function validateContact(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return { valid: true, error: "" };
+  if (trimmed.length > 40) return { valid: false, error: "Contact is too long (max 40 characters)." };
+  const passesAny = CONTACT_ALLOWLIST.some((re) => re.test(trimmed));
+  if (!passesAny) {
+    return {
+      valid: false,
+      error: "Use a phone number (+1234567890) or Telegram handle (@username).",
+    };
+  }
+  return { valid: true, error: "" };
+}
+
 // ── Profile & UI helpers ─────────────────────────────────────────────────
 
 export function computeStep3Done(profile) {
@@ -2248,6 +2278,7 @@ export default function Help() {
     const p = loadProfile();
     return { nickname: p.nickname || "", contact: p.contact || "" };
   });
+  const [contactError, setContactError] = useState("");
 
   const [emergencyType, setEmergencyType] = useState(null);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -2309,6 +2340,8 @@ export default function Help() {
   const [myRequests, setMyRequests] = useState([]);
   const [myRequestsLoading, setMyRequestsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(null);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   // Persist avatar selection to localStorage
@@ -2352,8 +2385,7 @@ export default function Help() {
   const [zkAnnouncement, setZkAnnouncement] = useState('');
 
   const [walletAddress, setWalletAddress] = useState("");
-  const [walletBalances, setWalletBalances] = useState([]);
-  const [walletBalanceStatus, setWalletBalanceStatus] = useState("idle");
+  const [walletLoading, setWalletLoading] = useState(true);
   const activeWalletAddress =
     typeof walletAddress === "string" && walletAddress.trim().length > 0
       ? walletAddress.trim()
@@ -2389,18 +2421,46 @@ export default function Help() {
     async function syncWallet() {
       try {
         const result = await token.wrap(StellarWalletsKit.getAddress());
-        if (result === undefined || result === null) return;
-        if (typeof result.address !== "string") return;
-        debouncedSet(sanitizeWalletAddress(result.address));
+        if (result === undefined || result === null) {
+          // No active session — check localStorage for saved address
+          const saved = loadWalletAddress();
+          if (saved) {
+            // Attempt silent reconnection with saved address
+            try {
+              const reconnect = await token.wrap(StellarWalletsKit.getAddress());
+              if (reconnect?.address) {
+                debouncedSet(sanitizeWalletAddress(reconnect.address));
+              } else {
+                // Reconnect failed — clear stale saved address
+                clearWalletAddress();
+                debouncedSet("");
+              }
+            } catch {
+              clearWalletAddress();
+              debouncedSet("");
+            }
+          } else {
+            debouncedSet("");
+          }
+        } else if (typeof result.address === "string") {
+          const sanitized = sanitizeWalletAddress(result.address);
+          debouncedSet(sanitized);
+          if (sanitized) saveWalletAddress(sanitized);
+        }
       } catch {
         if (token.active) debouncedSet("");
+      } finally {
+        if (token.active) setWalletLoading(false);
       }
     }
 
     syncWallet();
     offState = StellarWalletsKit.on(KitEventType.STATE_UPDATED, (event) => {
       if (!token.active) return;
-      debouncedSet(sanitizeWalletAddress(event?.payload?.address));
+      const sanitized = sanitizeWalletAddress(event?.payload?.address);
+      debouncedSet(sanitized);
+      if (sanitized) saveWalletAddress(sanitized);
+      else clearWalletAddress();
     });
     offDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
       try {
@@ -2408,6 +2468,7 @@ export default function Help() {
       } catch {
         // wallet update after disconnect — non-critical, ignore
       }
+      clearWalletAddress();
       setProfileOpen(false);
     });
 
@@ -3044,6 +3105,12 @@ export default function Help() {
       setSubmitError("Select what happened.");
       return;
     }
+    const contactCheck = validateContact(profile.contact);
+    if (!contactCheck.valid) {
+      setSubmitError(contactCheck.error);
+      setContactError(contactCheck.error);
+      return;
+    }
     const address = activeWalletAddress || (await promptWalletConnection());
     if (!address) {
       setSubmitError("Connect your Stellar wallet first.");
@@ -3591,6 +3658,36 @@ export default function Help() {
               ← Back
             </Link>
           </div>
+
+          {walletLoading && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "10px",
+                marginBottom: "16px",
+                borderRadius: "10px",
+                background: "rgba(115,87,255,0.08)",
+                border: "1px solid rgba(115,87,255,0.15)",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  border: "2px solid rgba(115,87,255,0.3)",
+                  borderTopColor: "#7357FF",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              <span style={{ fontSize: "12px", color: "rgba(242,236,220,0.5)" }}>
+                Reconnecting wallet...
+              </span>
+            </div>
+          )}
 
           <div
             style={{
@@ -4312,14 +4409,25 @@ export default function Help() {
                       }
                     />
                     <input
-                      style={S.input}
+                      style={{
+                        ...S.input,
+                        borderColor: contactError && profile.contact ? "rgba(255,122,107,0.5)" : S.input.border,
+                      }}
                       placeholder="@telegram or +54 11 5555-5555"
                       maxLength={40}
                       value={profile.contact}
-                      onChange={(e) =>
-                        setProfile((p) => ({ ...p, contact: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setProfile((p) => ({ ...p, contact: val }));
+                        const result = validateContact(val);
+                        setContactError(result.valid ? "" : result.error);
+                      }}
                     />
+                    {contactError && profile.contact && (
+                      <div style={{ fontSize: "10px", color: "#FF7A6B", marginTop: "4px", lineHeight: 1.4 }}>
+                        {contactError}
+                      </div>
+                    )}
                     <div
                       style={{
                         fontSize: "9.5px",
@@ -4327,7 +4435,7 @@ export default function Help() {
                         lineHeight: 1.4,
                       }}
                     >
-                      How responders reach you. Stored on-chain.
+                      Phone (+country code) or @telegram handle. Stored on-chain.
                     </div>
                   </div>
                 )}
@@ -5185,21 +5293,7 @@ export default function Help() {
               etaSeconds={responders[0].eta_seconds}
               isArrived={responderArrived}
               isResponderView={false}
-              onResolve={async () => {
-                try {
-                  await resolveRequest(
-                    activeWalletAddress,
-                    requestId,
-                    StellarWalletsKit,
-                  );
-                  setRequestStatus("Resolved");
-                  setFeedbackRequestId(requestId);
-                  setFeedbackResponderAddress(responders[0]?.responder || null);
-                  setShowFeedback(true);
-                } catch (err) {
-                  alert("Could not resolve: " + (err.message || ""));
-                }
-              }}
+              onResolve={() => setShowResolveConfirm(true)}
             />
           )}
 
@@ -5662,7 +5756,9 @@ export default function Help() {
                       width: "100%",
                       padding: "8px 10px",
                       background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      border: contactError && profile.contact
+                        ? "1px solid rgba(255,122,107,0.5)"
+                        : "1px solid rgba(255,255,255,0.08)",
                       borderRadius: "8px",
                       color: "rgba(242,236,220,0.9)",
                       fontSize: "13px",
@@ -5672,10 +5768,18 @@ export default function Help() {
                     placeholder="@telegram or +54 11 5555-5555"
                     maxLength={40}
                     value={profile.contact}
-                    onChange={(e) =>
-                      setProfile((p) => ({ ...p, contact: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProfile((p) => ({ ...p, contact: val }));
+                      const result = validateContact(val);
+                      setContactError(result.valid ? "" : result.error);
+                    }}
                   />
+                  {contactError && profile.contact && (
+                    <div style={{ fontSize: "10px", color: "#FF7A6B", marginTop: "4px", lineHeight: 1.4 }}>
+                      {contactError}
+                    </div>
+                  )}
                   <div
                     style={{
                       fontSize: "9.5px",
@@ -5939,6 +6043,197 @@ export default function Help() {
                 }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDisconnectConfirm && (
+        <div
+          onClick={() => setShowDisconnectConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1c3535",
+              borderRadius: "20px",
+              padding: "28px 24px 20px",
+              width: "100%",
+              maxWidth: "360px",
+              textAlign: "center",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
+            <h3
+              style={{
+                margin: "0 0 6px",
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "#F4ECDC",
+              }}
+            >
+              Disconnect wallet?
+            </h3>
+            <p
+              style={{
+                margin: "0 0 20px",
+                fontSize: "13px",
+                color: "rgba(242,236,220,0.5)",
+                lineHeight: 1.5,
+              }}
+            >
+              You will need to reconnect your wallet to request or offer help again.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.72)",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  await StellarWalletsKit.disconnect();
+                  setWalletAddress("");
+                  clearWalletAddress();
+                  setProfileOpen(false);
+                  setShowDisconnectConfirm(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#FF7A6B",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResolveConfirm && (
+        <div
+          onClick={() => setShowResolveConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1c3535",
+              borderRadius: "20px",
+              padding: "28px 24px 20px",
+              width: "100%",
+              maxWidth: "360px",
+              textAlign: "center",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
+            <h3
+              style={{
+                margin: "0 0 6px",
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "#F4ECDC",
+              }}
+            >
+              Resolve request?
+            </h3>
+            <p
+              style={{
+                margin: "0 0 20px",
+                fontSize: "13px",
+                color: "rgba(242,236,220,0.5)",
+                lineHeight: 1.5,
+              }}
+            >
+              This will mark the request as resolved. This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => setShowResolveConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.72)",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await resolveRequest(
+                      activeWalletAddress,
+                      requestId,
+                      StellarWalletsKit,
+                    );
+                    setRequestStatus("Resolved");
+                    setFeedbackRequestId(requestId);
+                    setFeedbackResponderAddress(responders[0]?.responder || null);
+                    setShowFeedback(true);
+                  } catch (err) {
+                    alert("Could not resolve: " + (err.message || ""));
+                  }
+                  setShowResolveConfirm(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#7357FF",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Resolve
               </button>
             </div>
           </div>

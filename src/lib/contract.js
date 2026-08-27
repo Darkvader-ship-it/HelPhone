@@ -31,8 +31,41 @@ const DEFAULT_CONTRACT_ID = assertValidContractId(
   "DEFAULT_CONTRACT_ID",
 );
 
-const ACTIVE_NETWORK_STORAGE_KEY = "helphone:active-network";
-const DEFAULT_FRIENDBOT_URL = "https://friendbot.stellar.org";
+const ACTIVE_NETWORK_STORAGE_KEY = 'helphone:active-network'
+const WALLET_ADDRESS_STORAGE_KEY = 'helphone:wallet-address'
+const DEFAULT_FRIENDBOT_URL = 'https://friendbot.stellar.org'
+
+// ── Wallet persistence (#160) ──────────────────────────────────────────────
+// Persists the wallet connection address to localStorage so the session
+// survives page reloads. The SDK reconnection is handled by the caller.
+
+/** Save wallet address to localStorage. Silently ignores storage failures. */
+export function saveWalletAddress(address) {
+  if (typeof address !== 'string' || !address) return
+  try {
+    window.localStorage?.setItem(WALLET_ADDRESS_STORAGE_KEY, address)
+  } catch {
+    // Storage quota exceeded or unavailable — non-critical
+  }
+}
+
+/** Load previously saved wallet address from localStorage, or empty string. */
+export function loadWalletAddress() {
+  try {
+    return window.localStorage?.getItem(WALLET_ADDRESS_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+/** Remove saved wallet address from localStorage. */
+export function clearWalletAddress() {
+  try {
+    window.localStorage?.removeItem(WALLET_ADDRESS_STORAGE_KEY)
+  } catch {
+    // Non-critical
+  }
+}
 
 export const HELPHONE_NETWORKS = {
   testnet: {

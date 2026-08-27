@@ -39,6 +39,12 @@
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes mddrift {
   0% {
     background-position: 0 0;
