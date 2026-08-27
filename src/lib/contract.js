@@ -155,6 +155,51 @@ const NETWORK = ACTIVE_NETWORK.networkPassphrase;
 const server = new rpc.Server(RPC_URL, { timeout: 30_000 });
 const contract = new Contract(CONTRACT_ID);
 
+// ── RPC Response Cache (issue #63) ──────────────────────────────
+// Caches read-only contract responses to reduce RPC rate limit hits
+// and deduplicate concurrent identical requests into a single promise.
+const _requestCache = new Map();
+const _requestPromises = new Map();
+const CACHE_TTL = {
+  short: 5_000,
+  long: 60_000,
+};
+
+function _getCacheKey(method, args) {
+  return `${method}:${JSON.stringify(args)}`;
+}
+
+function _getCachedValue(key) {
+  const entry = _requestCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.timestamp > entry.ttl) {
+    _requestCache.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+async function _withCache(method, args, ttl, fetchFn) {
+  const key = _getCacheKey(method, args);
+  const cached = _getCachedValue(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  if (_requestPromises.has(key)) {
+    return _requestPromises.get(key);
+  }
+  const promise = fetchFn().then((result) => {
+    _requestCache.set(key, { value: result, timestamp: Date.now(), ttl });
+    _requestPromises.delete(key);
+    return result;
+  }).catch((err) => {
+    _requestPromises.delete(key);
+    throw err;
+  });
+  _requestPromises.set(key, promise);
+  return promise;
+}
+
 // ── Coordinate encoding ─────────────────────────────────────────
 // The contract stores lat/lng as fixed-point i32: degrees * COORD_SCALE.
 const COORD_SCALE = 1_000_000;
@@ -389,68 +434,82 @@ async function resolveWalletAddress(wallet, fallback = "") {
 export async function getRequest(requestId) {
   const id = safeToNumber(requestId);
   if (!Number.isFinite(id) || id < 0) return null;
-  const sim = await simulateRead(
-    contract.call("get_request", scv(id, { type: "u64" })),
-  );
-  if (!sim.result) return null;
-  const raw = scValToNative(sim.result.retval);
-  return raw ? mapRequest(raw) : null;
+  return _withCache('getRequest', [id], CACHE_TTL.short, async () => {
+    const sim = await simulateRead(
+      contract.call("get_request", scv(id, { type: "u64" })),
+    );
+    if (!sim.result) return null;
+    const raw = scValToNative(sim.result.retval);
+    return raw ? mapRequest(raw) : null;
+  });
 }
 
 export async function getResponder(requestId, index) {
-  const sim = await simulateRead(
-    contract.call(
-      "get_responder",
-      scv(Number(requestId), { type: "u64" }),
-      scv(Number(index), { type: "u32" }),
-    ),
-  );
-  if (!sim.result) return null;
-  const raw = scValToNative(sim.result.retval);
-  return raw ? { id: `${requestId}-${index}`, ...mapResponder(raw) } : null;
+  return _withCache('getResponder', [requestId, index], CACHE_TTL.short, async () => {
+    const sim = await simulateRead(
+      contract.call(
+        "get_responder",
+        scv(Number(requestId), { type: "u64" }),
+        scv(Number(index), { type: "u32" }),
+      ),
+    );
+    if (!sim.result) return null;
+    const raw = scValToNative(sim.result.retval);
+    return raw ? { id: `${requestId}-${index}`, ...mapResponder(raw) } : null;
+  });
 }
 
 export async function getActiveRequests(max = 500) {
-  const sim = await simulateRead(contract.call("get_active_requests"));
-  if (!sim.result) return [];
-  const rawIds = scValToNative(sim.result.retval);
-  return rawIds.map((id) => safeToNumber(id)).slice(0, max);
+  return _withCache('getActiveRequests', [max], CACHE_TTL.short, async () => {
+    const sim = await simulateRead(contract.call("get_active_requests"));
+    if (!sim.result) return [];
+    const rawIds = scValToNative(sim.result.retval);
+    return rawIds.map((id) => safeToNumber(id)).slice(0, max);
+  });
 }
 
 export async function getRequestCount() {
-  const sim = await simulateRead(contract.call("get_request_count"));
-  if (!sim.result) return 0;
-  return safeToNumber(scValToNative(sim.result.retval));
+  return _withCache('getRequestCount', [], CACHE_TTL.short, async () => {
+    const sim = await simulateRead(contract.call("get_request_count"));
+    if (!sim.result) return 0;
+    return safeToNumber(scValToNative(sim.result.retval));
+  });
 }
 
 export async function getResponderCount(requestId) {
-  const sim = await simulateRead(
-    contract.call(
-      "get_responder_count",
-      scv(Number(requestId), { type: "u64" }),
-    ),
-  );
-  if (!sim.result) return 0;
-  return scValToNative(sim.result.retval);
+  return _withCache('getResponderCount', [requestId], CACHE_TTL.short, async () => {
+    const sim = await simulateRead(
+      contract.call(
+        "get_responder_count",
+        scv(Number(requestId), { type: "u64" }),
+      ),
+    );
+    if (!sim.result) return 0;
+    return scValToNative(sim.result.retval);
+  });
 }
 
 export async function getRanking(limit = 50, period = "All Time") {
-  const sim = await simulateRead(contract.call("get_ranking"));
-  if (!sim.result) return [];
-  return scValToNative(sim.result.retval).slice(0, limit);
+  return _withCache('getRanking', [limit, period], CACHE_TTL.long, async () => {
+    const sim = await simulateRead(contract.call("get_ranking"));
+    if (!sim.result) return [];
+    return scValToNative(sim.result.retval).slice(0, limit);
+  });
 }
 
 export async function getExpertVerifications(walletAddress, limit = 10) {
   if (!walletAddress) return [];
-  const sim = await simulateRead(
-    contract.call(
-      "get_expert_verifications",
-      scv(walletAddress, { type: "address" }),
-      scv(Number(limit), { type: "u32" }),
-    ),
-  );
-  if (!sim.result) return [];
-  return scValToNative(sim.result.retval) || [];
+  return _withCache('getExpertVerifications', [walletAddress, limit], CACHE_TTL.long, async () => {
+    const sim = await simulateRead(
+      contract.call(
+        "get_expert_verifications",
+        scv(walletAddress, { type: "address" }),
+        scv(Number(limit), { type: "u32" }),
+      ),
+    );
+    if (!sim.result) return [];
+    return scValToNative(sim.result.retval) || [];
+  });
 }
 
 // ── Contract event stream (issue #177) ─────────────────────────
@@ -489,31 +548,32 @@ export function subscribeToContractEvents(onEvent) {
 
 export async function getWalletBalances(address) {
   if (!address) return [];
+  return _withCache('getWalletBalances', [address], CACHE_TTL.long, async () => {
+    const url = new URL(`/accounts/${address}`, ACTIVE_NETWORK.horizonUrl);
+    const response = await fetch(url.toString());
 
-  const url = new URL(`/accounts/${address}`, ACTIVE_NETWORK.horizonUrl);
-  const response = await fetch(url.toString());
+    if (!response.ok) {
+      if (response.status === 404) return [];
+      throw new Error("Could not load wallet balances");
+    }
 
-  if (!response.ok) {
-    if (response.status === 404) return [];
-    throw new Error("Could not load wallet balances");
-  }
-
-  const account = await response.json();
-  return (account.balances || []).map((balance) => ({
-    asset: balance.asset_type === "native" ? "XLM" : balance.asset_code,
-    balance: Number(balance.balance),
-  }));
+    const account = await response.json();
+    return (account.balances || []).map((balance) => ({
+      asset: balance.asset_type === "native" ? "XLM" : balance.asset_code,
+      balance: Number(balance.balance),
+    }));
+  });
 }
 export async function checkAccount(address) {
   if (!address) return false;
-  try {
-    // rpc.Server.getAccount returns Account (sequence only, no balances).
-    // Throws NotFoundError if account doesn't exist / isn't funded.
-    await server.getAccount(address);
-    return true;
-  } catch {
-    return false;
-  }
+  return _withCache('checkAccount', [address], CACHE_TTL.long, async () => {
+    try {
+      await server.getAccount(address);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** Build the friendbot funding URL for an address.

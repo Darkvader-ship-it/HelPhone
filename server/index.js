@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import compression from 'compression'
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
@@ -77,13 +78,14 @@ const PORT = process.env.PORT || 3001
 
 // Solves Issue 1: Restrict CORS policy on ZK Prover Server
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',') 
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
     : ['https://helphone.com', 'https://staging.helphone.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
   preflightContinue: false,
   optionsSuccessStatus: 204
 }))
+app.use(compression())
 app.use(express.json({ limit: '1mb' }))
 
 // Rate limiter on all routes (disabled in test)
