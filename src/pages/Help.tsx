@@ -5277,22 +5277,24 @@ export default function Help() {
             }}
           >
             {walletConnecting ? (
-              <style>{`
-                @keyframes wallet-spin {
-                  0% { transform: rotate(0deg); }
-                  100% { transform: rotate(360deg); }
-                }
-              `}</style>
-              <div
-                style={{
-                  width: "18px",
-                  height: "18px",
-                  borderRadius: "50%",
-                  border: "2px solid rgba(115,87,255,0.3)",
-                  borderTopColor: "#7357FF",
-                  animation: "wallet-spin 0.8s linear infinite",
-                }}
-              />
+              <>
+                <style>{`
+                  @keyframes wallet-spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                `}</style>
+                <div
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    border: "2px solid rgba(115,87,255,0.3)",
+                    borderTopColor: "#7357FF",
+                    animation: "wallet-spin 0.8s linear infinite",
+                  }}
+                />
+              </>
             ) : profile.nickname || isWalletConnected ? (
               <img
                 src={`/assets/chars/${myChar}.png`}

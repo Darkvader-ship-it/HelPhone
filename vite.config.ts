@@ -1,8 +1,8 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
-import { visualizer } from 'rollup-plugin-visualizer'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig({
   plugins: [
@@ -13,62 +13,64 @@ export default defineConfig({
       template: 'sunburst',
     }),
     VitePWA({
-      registerType: 'autoUpdate',
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'service-worker.js',
+      registerType: "autoUpdate",
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "service-worker.js",
+      injectManifest: {
+        // Raise limit to 10MB to accommodate Barretenberg WASM/JS bundles
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+      },
       manifest: {
-        name: 'HelPhone - Emergency Response Network',
-        short_name: 'HelPhone',
-        description: 'Decentralized emergency response network powered by Stellar blockchain',
-        theme_color: '#234B4E',
-        background_color: '#ECE0CC',
-        display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        name: "HelPhone - Emergency Response Network",
+        short_name: "HelPhone",
+        description:
+          "Decentralized emergency response network powered by Stellar blockchain",
+        theme_color: "#234B4E",
+        background_color: "#ECE0CC",
+        display: "standalone",
+        start_url: "/",
+        scope: "/",
         icons: [
           {
-            src: '/assets/helphone-icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any'
+            src: "/assets/helphone-icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
           },
           {
-            src: '/assets/helphone-icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
+            src: "/assets/helphone-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
         ],
         screenshots: [
           {
-            src: '/assets/screenshot-1.png',
-            sizes: '540x720',
-            type: 'image/png',
-            form_factor: 'narrow'
+            src: "/assets/screenshot-1.png",
+            sizes: "540x720",
+            type: "image/png",
+            form_factor: "narrow",
           },
           {
-            src: '/assets/screenshot-2.png',
-            sizes: '1280x720',
-            type: 'image/png',
-            form_factor: 'wide'
-          }
-        ]
+            src: "/assets/screenshot-2.png",
+            sizes: "1280x720",
+            type: "image/png",
+            form_factor: "wide",
+          },
+        ],
       },
       workbox: {
-        globPatterns: [
-          '**/*.{js,css,html,ico,png,svg,wav,mp4,wasm,json}',
-        ],
-        globIgnores: [
-          '**/node_modules/**/*',
-          'dist/stats.html',
-        ],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,wav,mp4,wasm,json}"],
+        globIgnores: ["**/node_modules/**/*", "dist/stats.html"],
+        // Raise limit to 10MB to accommodate Barretenberg WASM/JS bundles
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api\.mapbox\.com\/.*/i,
-            handler: 'CacheFirst',
+            handler: "CacheFirst",
             options: {
-              cacheName: 'mapbox-api-cache',
+              cacheName: "mapbox-api-cache",
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -80,9 +82,9 @@ export default defineConfig({
           },
           {
             urlPattern: /^https:\/\/tiles\.mapbox\.com\/.*/i,
-            handler: 'CacheFirst',
+            handler: "CacheFirst",
             options: {
-              cacheName: 'mapbox-tiles-cache',
+              cacheName: "mapbox-tiles-cache",
               expiration: {
                 maxEntries: 500,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -94,9 +96,9 @@ export default defineConfig({
           },
           {
             urlPattern: /.*\.(wasm|json)$/,
-            handler: 'CacheFirst',
+            handler: "CacheFirst",
             options: {
-              cacheName: 'wasm-json-cache',
+              cacheName: "wasm-json-cache",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 365,
@@ -109,21 +111,21 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./test/setup.js'],
-    include: ['test/**/*.test.js', 'test/**/*.test.jsx'],
+    environment: "jsdom",
+    setupFiles: ["./test/setup.js"],
+    include: ["test/**/*.test.js", "test/**/*.test.jsx"],
     coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.{js,jsx}'],
+      provider: "v8",
+      reporter: ["text", "json", "html", "lcov"],
+      include: ["src/**/*.{js,jsx}"],
       exclude: [
-        'node_modules/',
-        'test/',
-        'tests/',
-        'dist/',
-        '**/*.config.js',
-        '**/*.config.mjs',
-        '**/setup.js',
+        "node_modules/",
+        "test/",
+        "tests/",
+        "dist/",
+        "**/*.config.js",
+        "**/*.config.mjs",
+        "**/setup.js",
       ],
       thresholds: {
         lines: 70,
@@ -137,10 +139,16 @@ export default defineConfig({
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        manualChunks: {
-          mapbox: ['mapbox-gl', 'react-map-gl'],
-          stellar: ['@stellar/stellar-sdk', '@creit-tech/stellar-wallets-kit'],
-          zk: ['@noir-lang/noir_js', '@aztec/bb.js'],
+        manualChunks(id) {
+          if (id.includes("mapbox-gl") || id.includes("react-map-gl"))
+            return "mapbox";
+          if (
+            id.includes("@stellar/stellar-sdk") ||
+            id.includes("stellar-wallets-kit")
+          )
+            return "stellar";
+          if (id.includes("@noir-lang") || id.includes("@aztec/bb.js"))
+            return "zk";
         },
       },
     },
@@ -149,28 +157,28 @@ export default defineConfig({
     port: 3000,
     open: true,
     headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
     },
     proxy: {
-      '/zk': {
-        target: 'http://127.0.0.1:3001',
+      "/zk": {
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
       },
     },
   },
   preview: {
     headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
     },
   },
   optimizeDeps: {
     exclude: [
-      '@noir-lang/noir_js',
-      '@noir-lang/backend_barretenberg',
-      '@noir-lang/acvm_js',
-      '@noir-lang/noirc_abi',
+      "@noir-lang/noir_js",
+      "@noir-lang/backend_barretenberg",
+      "@noir-lang/acvm_js",
+      "@noir-lang/noirc_abi",
     ],
   },
-})
+});
