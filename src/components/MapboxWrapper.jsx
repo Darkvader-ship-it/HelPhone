@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import Map, { NavigationControl } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -55,9 +55,33 @@ const MapboxWrapper = forwardRef(function MapboxWrapper(
   },
   ref,
 ) {
+  const internalRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (internalRef.current?.getMap) {
+        try {
+          const mapInstance = internalRef.current.getMap();
+          if (mapInstance) {
+            mapInstance.remove();
+          }
+        } catch {
+          // Map already removed or disposed
+        }
+      }
+    };
+  }, []);
+
   return (
     <Map
-      ref={ref}
+      ref={(mapInstance) => {
+        internalRef.current = mapInstance;
+        if (typeof ref === 'function') {
+          ref(mapInstance);
+        } else if (ref) {
+          ref.current = mapInstance;
+        }
+      }}
       mapboxAccessToken={accessToken ?? DEFAULT_TOKEN}
       initialViewState={initialViewState ?? DEFAULT_VIEW_STATE}
       style={style}
