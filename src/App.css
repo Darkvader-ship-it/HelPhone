@@ -47,11 +47,31 @@
 
 @keyframes mddrift {
   0% {
-    background-position: 0 0;
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    background-position: 0 -120px;
+    transform: translate3d(0, -120px, 0);
   }
+}
+
+@keyframes hp-shimmer {
+  0%,
+  100% {
+    opacity: 0.62;
+    transform: scaleX(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+[style*="mdpulse"],
+[style*="mdfloat"],
+[style*="spin"],
+[style*="mddrift"],
+[style*="hp-shimmer"] {
+  will-change: transform, opacity;
 }
 
 html {
