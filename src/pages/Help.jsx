@@ -2356,6 +2356,7 @@ export default function Help() {
   }, [selectedChar]);
 
   const [openRequests, setOpenRequests] = useState(new globalThis.Map());
+  const [openRequestsLoading, setOpenRequestsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [lastOfferReceipt, setLastOfferReceipt] = useState(null);
@@ -2386,6 +2387,7 @@ export default function Help() {
 
   const [walletAddress, setWalletAddress] = useState("");
   const [walletLoading, setWalletLoading] = useState(true);
+  const [walletConnecting, setWalletConnecting] = useState(false);
   const activeWalletAddress =
     typeof walletAddress === "string" && walletAddress.trim().length > 0
       ? walletAddress.trim()
@@ -2607,6 +2609,7 @@ export default function Help() {
     async function load() {
       if (loading) return;
       loading = true;
+      if (token.active) setOpenRequestsLoading(true);
       let failed = false;
       try {
         const ids = await getActiveRequests();
@@ -2632,6 +2635,7 @@ export default function Help() {
       } catch (_) {
         failed = true;
       }
+      if (token.active) setOpenRequestsLoading(false);
       loading = false;
 
       consecutiveFailures = failed ? consecutiveFailures + 1 : 0;
@@ -2735,6 +2739,7 @@ export default function Help() {
     // Re-entrant gate — return immediately if a modal is already open
     if (walletConnectionInFlight.current) return "";
     walletConnectionInFlight.current = true;
+    setWalletConnecting(true);
     try {
       // Defer to the next macrotask so the triggering click handler returns
       // before the wallet-kit UI mounts (fixes Safari / Firefox timing).
@@ -2753,6 +2758,7 @@ export default function Help() {
       // Callers treat "" as "not connected" — no distinct error path needed.
     } finally {
       walletConnectionInFlight.current = false;
+      setWalletConnecting(false);
     }
     return "";
   }
@@ -3750,10 +3756,10 @@ export default function Help() {
                 marginBottom: "8px",
               }}
             >
-              <span
+              <div
                 style={{
-                  width: "8px",
-                  height: "8px",
+                  width: "12px",
+                  height: "12px",
                   borderRadius: "50%",
                   flexShrink: 0,
                   background:
@@ -3761,13 +3767,40 @@ export default function Help() {
                       ? "#FF7A6B"
                       : zkStatus === "idle"
                         ? "rgba(242,236,220,0.28)"
-                        : "#B3A6FF",
-                  animation:
-                    zkStatus === "proving" || zkStatus === "recording"
-                      ? "mdblink 1.2s steps(1) infinite"
-                      : "none",
+                        : "rgba(179,166,255,0.2)",
+                  position: "relative",
+                  overflow: "hidden",
                 }}
-              />
+              >
+                {(zkStatus === "proving" || zkStatus === "recording") && (
+                  <style>{`
+                    @keyframes zk-spin {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                    }
+                    @keyframes zk-pulse {
+                      0%, 100% { opacity: 0.7; }
+                      50% { opacity: 1; }
+                    }
+                  `}</style>
+                )}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: "50%",
+                    border: "2px solid transparent",
+                    borderTopColor: "#B3A6FF",
+                    animation:
+                      zkStatus === "proving" || zkStatus === "recording"
+                        ? "zk-spin 1s linear infinite, zk-pulse 2s ease-in-out infinite"
+                        : "none",
+                  }}
+                />
+              </div>
               <span
                 style={{
                   fontSize: "11px",
@@ -3792,7 +3825,12 @@ export default function Help() {
                   textTransform: "uppercase",
                 }}
               >
-                {zkStatus === "idle" ? "ready" : zkStatus}
+                {zkStatus === "idle" ? "ready" : 
+                 zkStatus === "proving" ? "generating proof..." :
+                 zkStatus === "recording" ? "recording on-chain..." :
+                 zkStatus === "proved" ? "proof ready ✓" :
+                 zkStatus === "recorded" ? "recorded ✓" :
+                 zkStatus === "error" ? "error" : zkStatus}
               </span>
             </div>
             <p
@@ -4490,6 +4528,8 @@ export default function Help() {
                     >
                       {submitting
                         ? "Sending…"
+                        : walletConnecting
+                          ? "Connecting..."
                         : !isWalletConnected
                           ? "Connect wallet first"
                           : "Request help"}
@@ -4780,7 +4820,73 @@ export default function Help() {
                   >
                     ACTIVE REQUESTS
                   </div>
-                  {openRequests.size === 0 ? (
+                  {openRequestsLoading ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "rgba(255,255,255,0.03)",
+                            border: "1px solid rgba(255,255,255,0.05)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              marginBottom: "6px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "36px",
+                                height: "36px",
+                                borderRadius: "50%",
+                                flexShrink: 0,
+                                background:
+                                  "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                                backgroundSize: "200px 100%",
+                                animation: "hp-shimmer 1.6s ease-in-out infinite",
+                              }}
+                            />
+                            <div
+                              style={{
+                                flex: 1,
+                                height: "10px",
+                                borderRadius: "3px",
+                                background:
+                                  "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                                backgroundSize: "200px 100%",
+                                animation: "hp-shimmer 1.6s ease-in-out infinite",
+                              }}
+                            />
+                          </div>
+                          <div
+                            style={{
+                              marginLeft: "44px",
+                              width: "50px",
+                              height: "8px",
+                              borderRadius: "3px",
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
+                              backgroundSize: "200px 100%",
+                              animation: "hp-shimmer 1.6s ease-in-out infinite",
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : openRequests.size === 0 ? (
                     <p
                       style={{
                         fontSize: "12px",
@@ -5471,23 +5577,27 @@ export default function Help() {
                 setProfileOpen((o) => !o);
                 return;
               }
-              promptWalletConnection();
+              if (!walletConnecting) {
+                promptWalletConnection();
+              }
             }}
-            aria-label={isWalletConnected ? "Open profile" : "Connect Wallet"}
+            aria-label={isWalletConnected ? "Open profile" : walletConnecting ? "Connecting wallet..." : "Connect Wallet"}
             style={{
               width: "44px",
               height: "44px",
               borderRadius: "50%",
               padding: 0,
-              cursor: "pointer",
+              cursor: walletConnecting ? "default" : "pointer",
               background:
+                walletConnecting ? "rgba(115,87,255,0.2)" :
                 profile.nickname || isWalletConnected
                   ? "#234B4E"
                   : "rgba(35,75,78,0.55)",
-              border: `2px solid ${isWalletConnected ? "rgba(115,87,255,0.4)" : "rgba(255,255,255,0.12)"}`,
+              border: `2px solid ${walletConnecting ? "rgba(115,87,255,0.4)" : isWalletConnected ? "rgba(115,87,255,0.4)" : "rgba(255,255,255,0.12)"}`,
               overflow: "hidden",
               backdropFilter: "blur(8px)",
-              boxShadow: isWalletConnected
+              boxShadow: walletConnecting ? "0 0 0 3px rgba(115,87,255,0.25), 0 4px 16px rgba(0,0,0,0.3)" :
+                isWalletConnected
                 ? "0 0 0 3px rgba(115,87,255,0.15), 0 4px 16px rgba(0,0,0,0.3)"
                 : "0 4px 16px rgba(0,0,0,0.3)",
               display: "flex",
@@ -5495,7 +5605,24 @@ export default function Help() {
               justifyContent: "center",
             }}
           >
-            {profile.nickname || isWalletConnected ? (
+            {walletConnecting ? (
+              <style>{`
+                @keyframes wallet-spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+              <div
+                style={{
+                  width: "18px",
+                  height: "18px",
+                  borderRadius: "50%",
+                  border: "2px solid rgba(115,87,255,0.3)",
+                  borderTopColor: "#7357FF",
+                  animation: "wallet-spin 0.8s linear infinite",
+                }}
+              />
+            ) : profile.nickname || isWalletConnected ? (
               <img
                 src={`/assets/chars/${myChar}.png`}
                 style={{
