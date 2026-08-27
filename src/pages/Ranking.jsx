@@ -7,13 +7,6 @@ const PERIODS = Object.freeze(["This Week", "This Month", "All Time"]);
 
 const MEDALS = Object.freeze(["🥇", "🥈", "🥉"]);
 
-const SKELETON_KEYFRAMES = `
-@keyframes hp-shimmer {
-  0% { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
-}
-`;
-
 function SkeletonRow() {
   return (
     <div
@@ -233,7 +226,6 @@ export default function Ranking() {
               boxShadow: "0 4px 24px rgba(35,75,78,0.08)",
             }}
           >
-            <style>{SKELETON_KEYFRAMES}</style>
             <div
               style={{
                 display: "grid",

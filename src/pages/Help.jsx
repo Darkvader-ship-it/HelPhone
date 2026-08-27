@@ -9,10 +9,13 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";
-import { KitEventType } from "@creit-tech/stellar-wallets-kit/types";
 import { Marker, Popup, Source, Layer, useMap } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import MapboxWrapper from "../components/MapboxWrapper";
+import { useHelpUiState } from "../hooks/useHelpUiState";
+import { useLocationSearch } from "../hooks/useLocationSearch";
+import { useRequestMapState } from "../hooks/useRequestMapState";
+import { useWalletState } from "../hooks/useWalletState";
 import {
   getRequest,
   getActiveRequests,
@@ -23,14 +26,10 @@ import {
   markArrived,
   resolveRequest,
   cancelRequest,
-  getRanking,
   ensureAccountFunded,
-  getWalletBalances,
   updateLocation,
   recordExpertVerification,
   subscribeToContractEvents,
-  saveWalletAddress,
-  loadWalletAddress,
   clearWalletAddress,
 } from "../lib/contract";
 import {
@@ -2272,100 +2271,106 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
 
 export default function Help() {
   useDocumentTitle("Help");
-  const [mode, setMode] = useState("get");
-
-  const [profile, setProfile] = useState(() => {
-    const p = loadProfile();
-    return { nickname: p.nickname || "", contact: p.contact || "" };
-  });
-  const [contactError, setContactError] = useState("");
-
-  const [emergencyType, setEmergencyType] = useState(null);
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    try {
-      return localStorage.getItem("hp_tour_done") !== "1";
-    } catch {
-      return true;
-    }
-  });
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [feedbackRequestId, setFeedbackRequestId] = useState(null);
-  const [feedbackResponderAddress, setFeedbackResponderAddress] =
-    useState(null);
-
-  const [location, setLocation] = useState(null);
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState("");
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
-  const [searchSuggestLoading, setSearchSuggestLoading] = useState(false);
-  const [activeSuggestion, setActiveSuggestion] = useState(-1);
-  const searchBoxRef = useRef(null);
-  const searchAbortRef = useRef(null);
-  // Lets the outside-click handler cancel the in-flight autocomplete fetch.
-  // Without this, a slow/timed-out request that resolves after the user
-  // dismisses the dropdown would silently repopulate suggestions they
-  // already closed.
-  const searchSuggestTokenRef = useRef(null);
-
-  // Clean up searchBoxRef on unmount to prevent memory leaks (#253)
-  useEffect(() => {
-    return () => {
-      searchBoxRef.current = null;
-      searchAbortRef.current?.abort();
-    };
-  }, []);
-
-  const [requestId, setRequestId] = useState(null);
-  const [requestStatus, setRequestStatus] = useState("idle");
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const [requestError, setRequestError] = useState("");
-  const [responders, setResponders] = useState([]);
-  const [popupMarker, setPopupMarker] = useState(null);
-  const [selectedChar, setSelectedChar] = useState(() => {
-    try {
-      return localStorage.getItem("hp_selected_char") || null;
-    } catch {
-      return null;
-    }
-  });
-  const [mapStyleIndex, setMapStyleIndex] = useState(0);
-  const [styleOpen, setStyleOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [showMobileForm, setShowMobileForm] = useState(false);
-  const [myRequests, setMyRequests] = useState([]);
-  const [myRequestsLoading, setMyRequestsLoading] = useState(false);
-  const [showCancelConfirm, setShowCancelConfirm] = useState(null);
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [showAvatarModal, setShowAvatarModal] = useState(false);
-
-  // Persist avatar selection to localStorage
-  useEffect(() => {
-    try {
-      if (selectedChar) {
-        localStorage.setItem("hp_selected_char", selectedChar);
-      } else {
-        localStorage.removeItem("hp_selected_char");
-      }
-    } catch {}
-  }, [selectedChar]);
-
-  const [openRequests, setOpenRequests] = useState(new globalThis.Map());
-  const [openRequestsLoading, setOpenRequestsLoading] = useState(true);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [offerSubmitting, setOfferSubmitting] = useState(false);
-  const [lastOfferReceipt, setLastOfferReceipt] = useState(null);
-  const [trackingRequestId, setTrackingRequestId] = useState(null);
-  const [trackingIndex, setTrackingIndex] = useState(null);
-  const [responderArrived, setResponderArrived] = useState(false);
-  const [arrivalSubmitting, setArrivalSubmitting] = useState(false);
-  const [arrivalThanksOpen, setArrivalThanksOpen] = useState(false);
-  const [requesterLocation, setRequesterLocation] = useState(null);
+  const {
+    mode,
+    setMode,
+    profile,
+    setProfile,
+    contactError,
+    setContactError,
+    emergencyType,
+    setEmergencyType,
+    showEmergencyModal,
+    setShowEmergencyModal,
+    showOnboarding,
+    setShowOnboarding,
+    showFeedback,
+    setShowFeedback,
+    feedbackRequestId,
+    setFeedbackRequestId,
+    feedbackResponderAddress,
+    setFeedbackResponderAddress,
+    styleOpen,
+    setStyleOpen,
+    profileOpen,
+    setProfileOpen,
+    showMobileForm,
+    setShowMobileForm,
+    showCancelConfirm,
+    setShowCancelConfirm,
+    showDisconnectConfirm,
+    setShowDisconnectConfirm,
+    showResolveConfirm,
+    setShowResolveConfirm,
+    showAvatarModal,
+    setShowAvatarModal,
+    selectedChar,
+    setSelectedChar,
+    mapStyleIndex,
+    setMapStyleIndex,
+  } = useHelpUiState({ loadProfile });
+  const {
+    location,
+    setLocation,
+    locating,
+    locationError,
+    searchQuery,
+    setSearchQuery,
+    searchLoading,
+    searchError,
+    searchSuggestions,
+    searchSuggestLoading,
+    activeSuggestion,
+    setActiveSuggestion,
+    searchBoxRef,
+    requestLocation,
+    handleSearch,
+    selectSearchSuggestion,
+    handleSearchKeyDown,
+  } = useLocationSearch({ mapboxToken: MAPBOX_TOKEN });
+  const {
+    requestId,
+    setRequestId,
+    requestStatus,
+    setRequestStatus,
+    submitting,
+    setSubmitting,
+    submitError,
+    setSubmitError,
+    requestError,
+    setRequestError,
+    responders,
+    setResponders,
+    popupMarker,
+    setPopupMarker,
+    myRequests,
+    setMyRequests,
+    myRequestsLoading,
+    setMyRequestsLoading,
+    openRequests,
+    setOpenRequests,
+    openRequestsLoading,
+    setOpenRequestsLoading,
+    openRequestsArray,
+    selectedRequest,
+    setSelectedRequest,
+    offerSubmitting,
+    setOfferSubmitting,
+    lastOfferReceipt,
+    setLastOfferReceipt,
+    setTrackingRequestId,
+    setTrackingIndex,
+    responderArrived,
+    setResponderArrived,
+    arrivalSubmitting,
+    setArrivalSubmitting,
+    arrivalThanksOpen,
+    setArrivalThanksOpen,
+    requesterLocation,
+    setRequesterLocation,
+    settledViewport,
+    syncSettledViewport,
+  } = useRequestMapState({ defaultCenter: DEFAULT_CENTER });
   // ── ZK state — single reducer for atomic resets ───────────────────────────
   // All four ZK fields are managed together so that resetZkCheckpoint()
   // dispatches ONE action → ONE state transition → ONE scheduled render.
@@ -2385,103 +2390,27 @@ export default function Help() {
   // Issue #101 — screen-reader announcement for async ZK operations
   const [zkAnnouncement, setZkAnnouncement] = useState('');
 
-  const [walletAddress, setWalletAddress] = useState("");
-  const [walletLoading, setWalletLoading] = useState(true);
-  const [walletConnecting, setWalletConnecting] = useState(false);
-  const activeWalletAddress =
-    typeof walletAddress === "string" && walletAddress.trim().length > 0
-      ? walletAddress.trim()
-      : "";
-  const { isWalletConnected, displayAddress } = useMemo(
-    () => computeWalletStatus(walletAddress),
-    [walletAddress],
-  );
   const styleSelectorRef = useRef(null);
   const profileRef = useRef(null);
   const sidebarRef = useRef(null);
   const handleOfferBusy = useRef(false);
   const handleOfferMounted = useRef(true);
   const handleOfferSeq = useRef(0);
-  // Re-entrant guard for promptWalletConnection: prevents two concurrent auth
-  // modals from racing and broadcasting a stale address from the slower one.
-  const walletConnectionInFlight = useRef(false);
+  const {
+    setWalletAddress,
+    walletLoading,
+    walletConnecting,
+    walletBalances,
+    walletBalanceStatus,
+    activeWalletAddress,
+    isWalletConnected,
+    displayAddress,
+    promptWalletConnection,
+  } = useWalletState({ setProfileOpen });
 
   useEffect(() => {
     if (!location?.[0] || !location?.[1]) return;
   }, [location?.[0], location?.[1]]);
-
-  useEffect(() => {
-    const token = cancellationToken();
-    const {
-      debouncedSet,
-      flush: flushAddr,
-      cancel: cancelAddr,
-    } = createDebouncedSetter(setWalletAddress, 100);
-    let offState = () => {};
-    let offDisconnect = () => {};
-
-    async function syncWallet() {
-      try {
-        const result = await token.wrap(StellarWalletsKit.getAddress());
-        if (result === undefined || result === null) {
-          // No active session — check localStorage for saved address
-          const saved = loadWalletAddress();
-          if (saved) {
-            // Attempt silent reconnection with saved address
-            try {
-              const reconnect = await token.wrap(StellarWalletsKit.getAddress());
-              if (reconnect?.address) {
-                debouncedSet(sanitizeWalletAddress(reconnect.address));
-              } else {
-                // Reconnect failed — clear stale saved address
-                clearWalletAddress();
-                debouncedSet("");
-              }
-            } catch {
-              clearWalletAddress();
-              debouncedSet("");
-            }
-          } else {
-            debouncedSet("");
-          }
-        } else if (typeof result.address === "string") {
-          const sanitized = sanitizeWalletAddress(result.address);
-          debouncedSet(sanitized);
-          if (sanitized) saveWalletAddress(sanitized);
-        }
-      } catch {
-        if (token.active) debouncedSet("");
-      } finally {
-        if (token.active) setWalletLoading(false);
-      }
-    }
-
-    syncWallet();
-    offState = StellarWalletsKit.on(KitEventType.STATE_UPDATED, (event) => {
-      if (!token.active) return;
-      const sanitized = sanitizeWalletAddress(event?.payload?.address);
-      debouncedSet(sanitized);
-      if (sanitized) saveWalletAddress(sanitized);
-      else clearWalletAddress();
-    });
-    offDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
-      try {
-        if (token.active) debouncedSet("");
-      } catch {
-        // wallet update after disconnect — non-critical, ignore
-      }
-      clearWalletAddress();
-      setProfileOpen(false);
-    });
-
-    return () => {
-      token.cancel();
-      flushAddr();
-      cancelAddr();
-      offState();
-      offDisconnect();
-    };
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -2541,61 +2470,8 @@ export default function Help() {
   }, [activeWalletAddress, profile.nickname, profile.contact, profile.gender]);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchSuggestions([]);
-      return;
-    }
-
-    const token = cancellationToken();
-    searchSuggestTokenRef.current = token;
-    const controller = new AbortController();
-    const timeout = setTimeout(async () => {
-      try {
-        setSearchSuggestLoading(true);
-        const res = await token.wrap(
-          fetch(
-            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery.trim())}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&limit=5`,
-            { signal: controller.signal },
-          ),
-        );
-        const data = res !== undefined ? await res.json() : null;
-        if (data) {
-          setSearchSuggestions(data.features || []);
-          setActiveSuggestion(-1);
-        }
-      } catch {
-        if (token.active) setSearchSuggestions([]);
-      } finally {
-        if (token.active) setSearchSuggestLoading(false);
-      }
-    }, 500);
-
-    return () => {
-      token.cancel();
-      controller.abort();
-      clearTimeout(timeout);
-    };
-  }, [searchQuery]);
-
-  useEffect(() => {
-    if (searchSuggestions.length === 0) return;
-    function onPointerDown(e) {
-      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
-        // Cancel the in-flight autocomplete request too, otherwise a slow
-        // response landing after dismissal silently reopens the dropdown.
-        searchSuggestTokenRef.current?.cancel();
-        setSearchSuggestLoading(false);
-        setSearchSuggestions([]);
-        setActiveSuggestion(-1);
-      }
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [searchSuggestions.length]);
-
-  useEffect(() => {
     requestLocation();
-  }, []);
+  }, [requestLocation]);
 
   useEffect(() => {
     if (mode !== "offer") return;
@@ -2660,177 +2536,6 @@ export default function Help() {
       unsubscribe();
     };
   }, [mode]);
-
-  function requestLocation() {
-    if (!navigator.geolocation) {
-      setLocationError("Browser does not support geolocation. Search by city.");
-      return;
-    }
-    setLocating(true);
-    setLocationError("");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        // Reject out-of-range/non-finite coordinates here instead of
-        // letting them reach encodeCoord() during a contract write, where
-        // an out-of-range value throws deep inside a pending transaction
-        // rather than failing at acquisition time with a clear message.
-        const valid =
-          Number.isFinite(lat) &&
-          Number.isFinite(lng) &&
-          lat >= -90 &&
-          lat <= 90 &&
-          lng >= -180 &&
-          lng <= 180;
-        if (!valid) {
-          setLocationError(
-            "Received an invalid location. Search by city, or click the map to drop a pin.",
-          );
-          return;
-        }
-        setLocation([lat, lng]);
-      },
-      (err) => {
-        setLocating(false);
-        setLocationError(
-          err.code === 1
-            ? "Location blocked. Search by city, or click the map to drop a pin."
-            : err.code === 3
-              ? "Location request timed out. Search below or click the map."
-              : "Could not get location. Search below or click the map.",
-        );
-      },
-      { timeout: 12000 },
-    );
-  }
-
-  /**
-   * Open the wallet auth modal and return the connected address.
-   *
-   * Hardening applied:
-   *
-   * 1. Re-entrant gate (walletConnectionInFlight ref)
-   *    Only one auth modal may be open at a time.  A second call while the
-   *    first is still awaiting user interaction returns "" immediately without
-   *    opening a second modal.  This prevents two concurrent callers (e.g. the
-   *    mode-toggle button and handleSubmit) from both calling authModal(),
-   *    where the slower one would broadcast a stale or mismatched address.
-   *
-   * 2. Address validation (sanitizeWalletAddress)
-   *    The raw value from authModal() is passed through the structural
-   *    validator before it touches state.  A wallet extension returning a
-   *    non-G-address string (malformed, injected, or a dev-mode dummy) is
-   *    silently rejected — the function returns "" and setWalletAddress is
-   *    never called, so no stale value propagates into contract calls or ZK
-   *    proof recipientAddress fields.
-   *
-   * 3. Side-channel elimination
-   *    The catch block no longer logs err.message.  Some wallet-kit
-   *    implementations embed partial signing-key context, session tokens, or
-   *    WalletConnect handshake data in rejection error messages.  Logging
-   *    these with console.warn exposes them to any browser extension or
-   *    injected script that monkeypatches the console.  Errors are now
-   *    swallowed silently; only the boolean "cancelled / failed" signal
-   *    matters to callers (both paths return "").
-   */
-  async function promptWalletConnection() {
-    // Re-entrant gate — return immediately if a modal is already open
-    if (walletConnectionInFlight.current) return "";
-    walletConnectionInFlight.current = true;
-    setWalletConnecting(true);
-    try {
-      // Defer to the next macrotask so the triggering click handler returns
-      // before the wallet-kit UI mounts (fixes Safari / Firefox timing).
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const { address: raw } = await StellarWalletsKit.authModal();
-      // Validate address structure before storing — rejects malformed /
-      // injected values from misbehaving wallet extensions
-      const address = sanitizeWalletAddress(raw);
-      if (address) {
-        setWalletAddress(address);
-        return address;
-      }
-    } catch {
-      // Intentionally silent: error messages from wallet-kit rejections can
-      // contain cryptographic session material (side-channel risk).
-      // Callers treat "" as "not connected" — no distinct error path needed.
-    } finally {
-      walletConnectionInFlight.current = false;
-      setWalletConnecting(false);
-    }
-    return "";
-  }
-
-  async function handleSearch(e) {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q) return;
-    // Cancel any in-flight search before starting a new one, instead of
-    // letting overlapping requests race and both allocate/parse response
-    // bodies that only the latest result actually needs.
-    searchAbortRef.current?.abort();
-    const controller = new AbortController();
-    searchAbortRef.current = controller;
-    setSearchError("");
-    setSearchSuggestions([]);
-    setSearchLoading(true);
-    try {
-      const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}&limit=1`,
-        { signal: controller.signal },
-      );
-      const data = await res.json();
-      if (!data.features?.length) {
-        setSearchError("Place not found.");
-        setSearchLoading(false);
-        return;
-      }
-      const [lng, lat] = data.features[0].center;
-      setLocation([lat, lng]);
-      setLocationError("");
-      setSearchSuggestions([]);
-    } catch (err) {
-      if (err?.name !== "AbortError")
-        setSearchError("Search failed. Check your connection.");
-      else return;
-    }
-    setSearchLoading(false);
-  }
-
-  function selectSearchSuggestion(feature) {
-    if (!Array.isArray(feature?.center) || feature.center.length !== 2) return;
-    const [lng, lat] = feature.center;
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
-    setLocation([lat, lng]);
-    setLocationError("");
-    setSearchQuery(feature.place_name || feature.text || "");
-    setSearchSuggestions([]);
-    setActiveSuggestion(-1);
-    setSearchError("");
-  }
-
-  function handleSearchKeyDown(e) {
-    if (searchSuggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveSuggestion((i) => (i + 1) % searchSuggestions.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveSuggestion((i) =>
-        i <= 0 ? searchSuggestions.length - 1 : i - 1,
-      );
-    } else if (e.key === "Enter") {
-      if (activeSuggestion >= 0 && searchSuggestions[activeSuggestion]) {
-        e.preventDefault();
-        selectSearchSuggestion(searchSuggestions[activeSuggestion]);
-      }
-    } else if (e.key === "Escape") {
-      setSearchSuggestions([]);
-      setActiveSuggestion(-1);
-    }
-  }
 
   function validLocation() {
     return (
@@ -3382,7 +3087,7 @@ export default function Help() {
     if (!lastOfferReceipt || responderArrived) return;
     const token = cancellationToken();
     async function ping() {
-      if (!mounted) return;
+      if (!token.active) return;
       if (!validLocation()) return;
       if (!activeWalletAddress || !lastOfferReceipt?.requestId) return;
       try {
@@ -3469,40 +3174,11 @@ export default function Help() {
   }, [activeWalletAddress]);
 
   useEffect(() => {
-    if (!activeWalletAddress) {
-      setWalletBalances([]);
-      setWalletBalanceStatus("idle");
-      return;
-    }
-
-    const token = cancellationToken();
-    setWalletBalanceStatus("loading");
-    token
-      .wrap(getWalletBalances(activeWalletAddress))
-      .then((balances) => {
-        if (!token.active || !balances) return;
-        setWalletBalances(balances);
-        setWalletBalanceStatus("ready");
-      })
-      .catch(() => {
-        if (!token.active) return;
-        setWalletBalances([]);
-        setWalletBalanceStatus("error");
-      });
-
-    return () => token.cancel();
-  }, [activeWalletAddress]);
-  useEffect(() => {
     setTrackingRequestId(null);
     setTrackingIndex(null);
     setResponderArrived(false);
     setResponders([]);
   }, [mode, requestId]);
-
-  const openRequestsArray = useMemo(
-    () => Array.from(openRequests.values()),
-    [openRequests],
-  );
 
   const step1Done = !!location;
   const step2Done = !!emergencyType;
@@ -4828,7 +4504,6 @@ export default function Help() {
                         gap: "6px",
                       }}
                     >
-                      <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
                       {Array.from({ length: 3 }).map((_, i) => (
                         <div
                           key={i}
@@ -4998,7 +4673,6 @@ export default function Help() {
                       gap: "6px",
                     }}
                   >
-                    <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
                     {Array.from({ length: 3 }).map((_, i) => (
                       <div
                         key={i}
@@ -5237,12 +4911,9 @@ export default function Help() {
       >
         <MapboxWrapper
           accessToken={MAPBOX_TOKEN}
-          initialViewState={{
-            longitude: DEFAULT_CENTER[1],
-            latitude: DEFAULT_CENTER[0],
-            zoom: 2,
-          }}
+          initialViewState={settledViewport}
           mapStyle={MAP_STYLES[mapStyleIndex].url}
+          onMoveEnd={syncSettledViewport}
           onMapClick={(e) => {
             if (isGetMode && requestStatus === "idle" && e.lngLat) {
               setLocation([e.lngLat.lat, e.lngLat.lng]);

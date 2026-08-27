@@ -1,7 +1,9 @@
+import cluster from 'node:cluster'
 import express from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import { readFileSync } from 'fs'
+import { availableParallelism, cpus } from 'os'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { rpc } from '@stellar/stellar-sdk'
@@ -73,8 +75,15 @@ export function errorHandler(err, _req, res, _next) {
   })
 }
 
-const app = express()
+export const app = express()
 const PORT = process.env.PORT || 3001
+
+function workerCount() {
+  const configured = Number(process.env.WEB_CONCURRENCY)
+  return Number.isFinite(configured) && configured > 0
+    ? Math.floor(configured)
+    : Math.max(1, availableParallelism())
+}
 
 // Solves Issue 1: Restrict CORS policy on ZK Prover Server
 app.use(cors({
@@ -192,7 +201,6 @@ async function ensureProver() {
 async function initProver() {
   const { Noir } = await import('@noir-lang/noir_js')
   const { UltraHonkBackend } = await import('@aztec/bb.js')
-  const { cpus } = await import('os')
 
   const circuitPath = join(__dirname, '..', 'circuits', 'target', 'aegis.json')
   const circuit = JSON.parse(readFileSync(circuitPath, 'utf-8'))
@@ -376,7 +384,35 @@ app.get('/api/feedback/:requestId', (req, res) => {
   res.json(entry)
 })
 
-app.listen(PORT, () => {
-  console.log(`ZK Prover on http://localhost:${PORT}`)
-  ensureProver().catch(err => console.error('[prover] Init failed:', err))
-})
+export function startServer() {
+  return app.listen(PORT, () => {
+    console.log(`ZK Prover worker ${process.pid} on http://localhost:${PORT}`)
+    ensureProver().catch(err => console.error('[prover] Init failed:', err))
+  })
+}
+
+function startCluster() {
+  if (process.env.NODE_ENV === 'test' || !cluster.isPrimary) {
+    startServer()
+    return
+  }
+
+  const workers = workerCount()
+  console.log(`[cluster] Primary ${process.pid} starting ${workers} workers`)
+  for (let i = 0; i < workers; i++) {
+    cluster.fork()
+  }
+
+  cluster.on('exit', (worker, code, signal) => {
+    console.error(
+      `[cluster] Worker ${worker.process.pid} exited (${signal || code}); restarting`,
+    )
+    cluster.fork()
+  })
+}
+
+const isDirectRun = process.argv[1] === fileURLToPath(import.meta.url)
+
+if (isDirectRun) {
+  startCluster()
+}
