@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit/sdk'
 import { Networks, SwkAppDarkTheme } from '@creit-tech/stellar-wallets-kit/types'
 import { defaultModules } from '@creit-tech/stellar-wallets-kit/modules/utils'
@@ -30,6 +31,21 @@ function helphoneWalletModules() {
     if (iconPath) module.productIcon = iconPath
     return module
   })
+}
+
+// Issue #102 — move focus to the main heading after route transitions
+function RouteChangeTracker() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const heading = document.querySelector('h1')
+    if (heading) {
+      if (!heading.hasAttribute('tabindex')) {
+        heading.setAttribute('tabindex', '-1')
+      }
+      heading.focus({ preventScroll: true })
+    }
+  }, [pathname])
+  return null
 }
 
 StellarWalletsKit.init({

@@ -10,15 +10,9 @@ import {
 import { Link } from "react-router-dom";
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";
 import { KitEventType } from "@creit-tech/stellar-wallets-kit/types";
-import Map, {
-  Marker,
-  Popup,
-  Source,
-  Layer,
-  NavigationControl,
-  useMap,
-} from "react-map-gl/mapbox";
+import { Marker, Popup, Source, Layer, useMap } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
+import MapboxWrapper from "../components/MapboxWrapper";
 import {
   getRequest,
   getActiveRequests,
@@ -44,6 +38,7 @@ import {
   generateLocationProof,
   shortProofId,
 } from "../lib/zk";
+import useDocumentTitle from "../lib/useDocumentTitle";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -95,6 +90,16 @@ function CharMarker({
   return (
     <Marker latitude={lat} longitude={lng} onClick={onClick}>
       <div
+        className="hp-marker"
+        tabIndex={0}
+        role="button"
+        aria-label={`Responder marker for ${charName}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick?.(e);
+          }
+        }}
         style={{
           position: "relative",
           width: 52,
@@ -106,8 +111,7 @@ function CharMarker({
           src={`/assets/chars/${charName}.png`}
           alt=""
           onError={(e) => {
-            if (e.currentTarget.src.endsWith(`${CHARS.default[0]}.png`))
-              return;
+            if (e.currentTarget.src.endsWith(`${CHARS.default[0]}.png`)) return;
             e.currentTarget.src = `/assets/chars/${CHARS.default[0]}.png`;
           }}
           style={{
@@ -143,6 +147,93 @@ function MapController({ center, zoom = 14 }) {
       return;
     map.flyTo({ center: [center[1], center[0]], zoom, duration: 1200 });
   }, [center, zoom, map]);
+  return null;
+}
+
+function MapKeyboardControls() {
+  const { current: map } = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    const mapContainer = map.getContainer();
+    if (!mapContainer) return;
+
+    // Ensure the container itself can be focused so keydowns are captured
+    mapContainer.setAttribute("tabindex", "0");
+    // Ensure the canvas is not in tab order so we don't double tab
+    const canvas = map.getCanvas();
+    if (canvas) {
+      canvas.setAttribute("tabindex", "-1");
+    }
+
+    // Set styling for focus outline
+    const styleId = "map-focus-styles";
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = styleId;
+      styleEl.innerHTML = `
+        .mapboxgl-map:focus {
+          outline: 2px solid #FF7A6B;
+          outline-offset: -2px;
+        }
+        .hp-marker:focus {
+          outline: 3px solid #FF7A6B !important;
+          outline-offset: 4px;
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    const handleKeyDown = (e) => {
+      const activeEl = document.activeElement;
+      // Only handle if map container has focus or contains the focused element (excluding inputs/textarea)
+      if (activeEl !== mapContainer && !mapContainer.contains(activeEl)) return;
+      if (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")
+        return;
+
+      const PAN_OFFSET = 100; // pixels to pan
+      const ZOOM_OFFSET = 0.5; // zoom level delta
+
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          map.panBy([0, -PAN_OFFSET]);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          map.panBy([0, PAN_OFFSET]);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          map.panBy([-PAN_OFFSET, 0]);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          map.panBy([PAN_OFFSET, 0]);
+          break;
+        case "+":
+        case "=":
+          e.preventDefault();
+          map.zoomTo(map.getZoom() + ZOOM_OFFSET);
+          break;
+        case "-":
+        case "_":
+          e.preventDefault();
+          map.zoomTo(map.getZoom() - ZOOM_OFFSET);
+          break;
+        default:
+          break;
+      }
+    };
+
+    mapContainer.addEventListener("keydown", handleKeyDown);
+    return () => {
+      mapContainer.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [map]);
+
   return null;
 }
 
@@ -301,25 +392,6 @@ export function txExplorerUrl(hash) {
   return `https://stellar.expert/explorer/testnet/tx/${trimmed}`;
 }
 
-export const HELP_ONBOARDING_STEPS = [
-  {
-    label: "Request",
-    title: "Help when you need it",
-    body: "HelPhone connects you with people nearby when you're in an emergency. You can request help or offer help to others. Everything runs on Stellar — fast, public, and verifiable.",
-  },
-  {
-    label: "Receipt",
-    title: "Your action goes on-chain first",
-    body: "When you request or offer help, Stellar confirms it in seconds. That creates a public transaction hash — your receipt.",
-  },
-  {
-    label: "Wallet",
-    title: "Connect your preferred wallet",
-    body: "Your Stellar wallet only signs transactions — it's not a tracking tool. Connect to request help, offer help, or verify your identity on the network.",
-    isLast: true,
-  },
-];
-
 export function ExplorerLink({ label, hash }) {
   const url = txExplorerUrl(hash);
   if (!url) return null;
@@ -343,6 +415,7 @@ export function ExplorerLink({ label, hash }) {
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
+        minHeight: "44px",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.textDecoration = "underline";
@@ -642,14 +715,21 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
   const dialogRef = useRef(null);
 
   useEffect(() => {
-    if (open) { setRating(0); setHovered(0); setComment(""); setSubmitted(false); }
+    if (open) {
+      setRating(0);
+      setHovered(0);
+      setComment("");
+      setSubmitted(false);
+    }
   }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
     const prev = document.activeElement;
     dialogRef.current?.focus();
-    function handleKey(e) { if (e.key === "Escape") onClose(); }
+    function handleKey(e) {
+      if (e.key === "Escape") onClose();
+    }
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("keydown", handleKey);
@@ -668,8 +748,19 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        background: "rgba(0,0,0,0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         ref={dialogRef}
@@ -677,22 +768,56 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
         aria-modal="true"
         aria-labelledby="feedback-modal-title"
         tabIndex={-1}
-        style={{ width: "100%", maxWidth: "420px", borderRadius: "18px", background: "#1c2c24", border: "1px solid rgba(255,255,255,0.1)", padding: "28px 24px 24px", outline: "none" }}
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          borderRadius: "18px",
+          background: "#1c2c24",
+          border: "1px solid rgba(255,255,255,0.1)",
+          padding: "28px 24px 24px",
+          outline: "none",
+        }}
       >
         {submitted ? (
           <div style={{ textAlign: "center", padding: "16px 0" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>✓</div>
-            <p style={{ color: "#F4ECDC", fontWeight: 700, margin: 0 }}>Thanks for your feedback!</p>
+            <p style={{ color: "#F4ECDC", fontWeight: 700, margin: 0 }}>
+              Thanks for your feedback!
+            </p>
           </div>
         ) : (
           <>
-            <h2 id="feedback-modal-title" style={{ margin: "0 0 6px", color: "#F4ECDC", fontSize: "20px", fontWeight: 700 }}>
+            <h2
+              id="feedback-modal-title"
+              style={{
+                margin: "0 0 6px",
+                color: "#F4ECDC",
+                fontSize: "20px",
+                fontWeight: 700,
+              }}
+            >
               Rate your responder
             </h2>
-            <p style={{ margin: "0 0 20px", color: "rgba(242,236,220,0.55)", fontSize: "13px", lineHeight: 1.55 }}>
+            <p
+              style={{
+                margin: "0 0 20px",
+                color: "rgba(242,236,220,0.55)",
+                fontSize: "13px",
+                lineHeight: 1.55,
+              }}
+            >
               Your rating builds on-chain reputation for responders who show up.
             </p>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "20px" }} role="group" aria-label="Star rating">
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                justifyContent: "center",
+                marginBottom: "20px",
+              }}
+              role="group"
+              aria-label="Star rating"
+            >
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -701,7 +826,22 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHovered(star)}
                   onMouseLeave={() => setHovered(0)}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: "32px", color: star <= (hovered || rating) ? "#FF7A6B" : "rgba(255,255,255,0.15)", transition: "color 0.15s" }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "32px",
+                    minWidth: "44px",
+                    minHeight: "44px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color:
+                      star <= (hovered || rating)
+                        ? "#FF7A6B"
+                        : "rgba(255,255,255,0.15)",
+                    transition: "color 0.15s",
+                  }}
                 >
                   ★
                 </button>
@@ -713,17 +853,54 @@ export function FeedbackModal({ open, onClose, onSubmit }) {
               maxLength={500}
               placeholder="Optional comment…"
               rows={3}
-              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", color: "#F4ECDC", fontSize: "13px", padding: "10px 12px", resize: "vertical", outline: "none", marginBottom: "16px" }}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "10px",
+                color: "#F4ECDC",
+                fontSize: "13px",
+                padding: "10px 12px",
+                resize: "vertical",
+                outline: "none",
+                marginBottom: "16px",
+              }}
             />
             <div style={{ display: "flex", gap: "10px" }}>
-              <button type="button" onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(242,236,220,0.65)", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.65)",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
                 Skip
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={rating === 0}
-                style={{ flex: 2, padding: "12px", borderRadius: "10px", border: "none", background: rating > 0 ? "#FF7A6B" : "rgba(255,122,107,0.3)", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: rating > 0 ? "pointer" : "not-allowed", transition: "background 0.2s" }}
+                style={{
+                  flex: 2,
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: rating > 0 ? "#FF7A6B" : "rgba(255,122,107,0.3)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: rating > 0 ? "pointer" : "not-allowed",
+                  transition: "background 0.2s",
+                }}
               >
                 Submit rating
               </button>
@@ -748,17 +925,51 @@ const ET_COLORS = Object.freeze({
   other: "#3F8487",
 });
 
-export function EmergencyMarker({ lat, lng, emergencyType, onClick, children }) {
+export function EmergencyMarker({
+  lat,
+  lng,
+  emergencyType,
+  onClick,
+  children,
+}) {
   const color = ET_COLORS[emergencyType] || "#FF7A6B";
   const icon = ET_ICONS[emergencyType] || ET_ICONS.other;
   return (
     <Marker latitude={lat} longitude={lng} onClick={onClick}>
-      <div style={{ position: "relative", cursor: "pointer" }}>
-        <svg width="36" height="44" viewBox="0 0 36 44" fill="none" aria-label={emergencyType || "emergency"}>
-          <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z" fill={color} />
+      <div
+        className="hp-marker"
+        tabIndex={0}
+        role="button"
+        aria-label={`Emergency: ${emergencyType}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick?.(e);
+          }
+        }}
+        style={{ position: "relative", cursor: "pointer" }}
+      >
+        <svg
+          width="36"
+          height="44"
+          viewBox="0 0 36 44"
+          fill="none"
+          aria-label={emergencyType || "emergency"}
+        >
+          <path
+            d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26s18-12.5 18-26C36 8.06 27.94 0 18 0z"
+            fill={color}
+          />
           <circle cx="18" cy="18" r="13" fill="rgba(0,0,0,0.25)" />
         </svg>
-        <div style={{ position: "absolute", top: "7px", left: "8px", color: "#fff" }}>
+        <div
+          style={{
+            position: "absolute",
+            top: "7px",
+            left: "8px",
+            color: "#fff",
+          }}
+        >
           {icon}
         </div>
         {children}
@@ -771,13 +982,52 @@ export function MapLegend() {
   return (
     <div
       aria-label="Map legend"
-      style={{ position: "absolute", bottom: "48px", right: "12px", zIndex: 100, background: "rgba(20,32,28,0.92)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px", padding: "10px 12px", minWidth: "148px" }}
+      style={{
+        position: "absolute",
+        bottom: "48px",
+        right: "12px",
+        zIndex: 100,
+        background: "rgba(20,32,28,0.92)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: "10px",
+        padding: "10px 12px",
+        minWidth: "148px",
+      }}
     >
-      <div style={{ fontSize: "9px", letterSpacing: "1.2px", color: "#7fb8ba", fontWeight: 900, marginBottom: "8px" }}>EMERGENCY TYPES</div>
+      <div
+        style={{
+          fontSize: "9px",
+          letterSpacing: "1.2px",
+          color: "#7fb8ba",
+          fontWeight: 900,
+          marginBottom: "8px",
+        }}
+      >
+        EMERGENCY TYPES
+      </div>
       {EMERGENCY_TYPES.filter((et) => et.id !== "other").map((et) => (
-        <div key={et.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
-          <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: ET_COLORS[et.id] || "#FF7A6B", flexShrink: 0 }} />
-          <span style={{ fontSize: "11px", color: "rgba(242,236,220,0.75)" }}>{et.icon} {et.label}</span>
+        <div
+          key={et.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "5px",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              width: "10px",
+              height: "10px",
+              borderRadius: "50%",
+              background: ET_COLORS[et.id] || "#FF7A6B",
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: "11px", color: "rgba(242,236,220,0.75)" }}>
+            {et.icon} {et.label}
+          </span>
         </div>
       ))}
     </div>
@@ -924,8 +1174,8 @@ export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
             aria-label="Close guide"
             onClick={onClose}
             style={{
-              width: "34px",
-              height: "34px",
+              width: "44px",
+              height: "44px",
               borderRadius: "8px",
               border: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(255,255,255,0.05)",
@@ -933,6 +1183,9 @@ export function HelpOnboardingModal({ open, onClose, onConnectWallet }) {
               cursor: "pointer",
               fontSize: "18px",
               lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             x
@@ -1825,8 +2078,8 @@ export function cancellationToken() {
 const RETRY_CLS = "hp-mobile-open";
 const RETRY_ID = "helphone-help-sidebar";
 
-// Dead-letter queue for safeToggleClass — plain object avoids the global Map
-// constructor which is shadowed by the react-map-gl import on line 13.
+// Dead-letter queue for safeToggleClass — a plain null-prototype object,
+// used as a simple string-keyed store (no inherited keys to collide with).
 const dlq = Object.create(null);
 
 /**
@@ -1943,10 +2196,22 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
         >
           Choose your avatar
         </h3>
-        <p style={{ margin: "0 0 16px", fontSize: "12px", color: "rgba(242,236,220,0.4)" }}>
+        <p
+          style={{
+            margin: "0 0 16px",
+            fontSize: "12px",
+            color: "rgba(242,236,220,0.4)",
+          }}
+        >
           Pick a character to represent you on the map.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "8px",
+          }}
+        >
           {ALL_CHARS.map((name) => (
             <button
               key={name}
@@ -1958,15 +2223,26 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
                 borderRadius: "10px",
                 overflow: "hidden",
                 cursor: "pointer",
-                background: selected === name ? "rgba(115,87,255,0.2)" : "rgba(255,255,255,0.04)",
-                border: selected === name ? "2px solid #7357FF" : "2px solid rgba(255,255,255,0.08)",
+                background:
+                  selected === name
+                    ? "rgba(115,87,255,0.2)"
+                    : "rgba(255,255,255,0.04)",
+                border:
+                  selected === name
+                    ? "2px solid #7357FF"
+                    : "2px solid rgba(255,255,255,0.08)",
                 transition: "all 0.15s",
               }}
             >
               <img
                 src={`/assets/chars/${name}.png`}
                 alt={name}
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
               />
             </button>
           ))}
@@ -1995,6 +2271,7 @@ function AvatarSelectionModal({ open, onClose, selected, onSelect }) {
 }
 
 export default function Help() {
+  useDocumentTitle("Help");
   const [mode, setMode] = useState("get");
 
   const [profile, setProfile] = useState(() => {
@@ -2014,7 +2291,8 @@ export default function Help() {
   });
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackRequestId, setFeedbackRequestId] = useState(null);
-  const [feedbackResponderAddress, setFeedbackResponderAddress] = useState(null);
+  const [feedbackResponderAddress, setFeedbackResponderAddress] =
+    useState(null);
 
   const [location, setLocation] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -2077,7 +2355,7 @@ export default function Help() {
     } catch {}
   }, [selectedChar]);
 
-  const [openRequests, setOpenRequests] = useState(new Map());
+  const [openRequests, setOpenRequests] = useState(new globalThis.Map());
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [offerSubmitting, setOfferSubmitting] = useState(false);
   const [lastOfferReceipt, setLastOfferReceipt] = useState(null);
@@ -2102,6 +2380,9 @@ export default function Help() {
   const zkLogs = zkState.logs;
   const zkProof = zkState.proof;
   const zkError = zkState.error;
+
+  // Issue #101 — screen-reader announcement for async ZK operations
+  const [zkAnnouncement, setZkAnnouncement] = useState('');
 
   const [walletAddress, setWalletAddress] = useState("");
   const [walletLoading, setWalletLoading] = useState(true);
@@ -2129,8 +2410,11 @@ export default function Help() {
 
   useEffect(() => {
     const token = cancellationToken();
-    const { debouncedSet, flush: flushAddr, cancel: cancelAddr } =
-      createDebouncedSetter(setWalletAddress, 100);
+    const {
+      debouncedSet,
+      flush: flushAddr,
+      cancel: cancelAddr,
+    } = createDebouncedSetter(setWalletAddress, 100);
     let offState = () => {};
     let offDisconnect = () => {};
 
@@ -2226,11 +2510,12 @@ export default function Help() {
   // (#137) Sync preferences to the backend when the wallet is connected.
   // On wallet connect: load server prefs and merge over localStorage.
   // On profile change: push latest prefs to the server.
-  const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+  const SERVER_BASE =
+    import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
   useEffect(() => {
     if (!activeWalletAddress) return;
     fetch(`${SERVER_BASE}/api/preferences/${activeWalletAddress}`)
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.preferences && Object.keys(data.preferences).length > 0) {
           setProfile((prev) => ({ ...prev, ...data.preferences }));
@@ -2335,7 +2620,9 @@ export default function Help() {
           ),
         ).then((results) => results.filter(Boolean));
         if (token.active) {
-          const map = new Map(requests.map((req) => [Number(req.id), req]));
+          const map = new globalThis.Map(
+            requests.map((req) => [Number(req.id), req]),
+          );
           setOpenRequests(map);
           setSelectedRequest((current) => {
             if (!current) return current;
@@ -2610,6 +2897,15 @@ export default function Help() {
     dispatchZk({ type: "RESET" });
   }
 
+  // Issue #101 — announce ZK status transitions to screen readers
+  useEffect(() => {
+    if (zkStatus === 'proving') setZkAnnouncement('Location proof generation started');
+    else if (zkStatus === 'proved') setZkAnnouncement('Location proof generated successfully');
+    else if (zkStatus === 'recording') setZkAnnouncement('Recording proof on Stellar blockchain');
+    else if (zkStatus === 'recorded') setZkAnnouncement('Proof recorded on Stellar successfully');
+    else if (zkStatus === 'error') setZkAnnouncement(`Error: ${zkError || 'proof generation failed'}`);
+  }, [zkStatus, zkError]);
+
   // O(1) removal: Map keyed by numeric id — no linear scan.
   // NaN is rejected up front: every unparseable id would otherwise coerce to
   // the same NaN key, so distinct requests could collide and clobber or
@@ -2622,7 +2918,7 @@ export default function Help() {
     );
     setOpenRequests((prev) => {
       if (!prev.has(key)) return prev;
-      const next = new Map(prev);
+      const next = new globalThis.Map(prev);
       next.delete(key);
       return next;
     });
@@ -2633,7 +2929,7 @@ export default function Help() {
     if (!Number.isFinite(key)) return null;
     const request = { ...fresh, id: key };
     setOpenRequests((prev) => {
-      const next = new Map(prev);
+      const next = new globalThis.Map(prev);
       next.set(key, request);
       return next;
     });
@@ -2657,7 +2953,7 @@ export default function Help() {
   }
 
   // Track active refresh operations to prevent concurrent access control bypass
-  const _refreshLocks = new Map();
+  const _refreshLocks = new globalThis.Map();
 
   async function refreshPendingRequest(reqId) {
     // Normalize before locking/keying: a raw reqId can arrive as a string or
@@ -2730,30 +3026,30 @@ export default function Help() {
 
   // Parallelized checkpoint recording with CORS-safe error handling
   // Prevents inaccurate state synchronization by handling cross-origin rejections
-  const _checkpointRecordLock = new Map();
+  const _checkpointRecordLock = new globalThis.Map();
   const _LOCK_TTL = 30000; // 30 second lock TTL for stale lock cleanup
-  
+
   async function recordZkCheckpoint(address, action, txHash, checkpoint) {
     if (!checkpoint?.nullifier) return;
-    
+
     // Prevent parallel recording of same checkpoint to avoid state sync issues
     const lockKey = `${checkpoint.nullifier}-${action}`;
     const existingLock = _checkpointRecordLock.get(lockKey);
-    
+
     // Clean up stale locks
-    if (existingLock && (Date.now() - existingLock.timestamp) > _LOCK_TTL) {
+    if (existingLock && Date.now() - existingLock.timestamp > _LOCK_TTL) {
       _checkpointRecordLock.delete(lockKey);
     } else if (existingLock) {
       pushZkLog("Checkpoint recording already in progress");
       return;
     }
-    
+
     _checkpointRecordLock.set(lockKey, { timestamp: Date.now() });
-    
+
     try {
       dispatchZk({ type: "SET_STATUS", payload: "recording" });
       pushZkLog("Writing proof fingerprint to Stellar");
-      
+
       // Parallelize with timeout to handle CORS rejections safely
       const recordPromise = recordExpertVerification(
         address,
@@ -2762,13 +3058,13 @@ export default function Help() {
         checkpoint.nullifier,
         StellarWalletsKit,
       );
-      
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("CORS timeout")), 15000)
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("CORS timeout")), 15000),
       );
-      
+
       const record = await Promise.race([recordPromise, timeoutPromise]);
-      
+
       dispatchZk({
         type: "PATCH_PROOF",
         payload: { recordTxHash: record.hash || "" },
@@ -2777,7 +3073,7 @@ export default function Help() {
       pushZkLog("Stellar checkpoint recorded");
     } catch (err) {
       dispatchZk({ type: "SET_STATUS", payload: "proved" });
-      
+
       // CORS-safe error handling - don't expose sensitive error details
       let errorMsg = "wallet rejected";
       if (err.message?.includes("CORS") || err.message?.includes("network")) {
@@ -2787,9 +3083,9 @@ export default function Help() {
       } else if (err.message?.includes("fetch")) {
         errorMsg = "connection failed";
       }
-      
+
       pushZkLog(`Checkpoint record skipped: ${errorMsg}`);
-      
+
       // Ensure state is synchronized even on rejection
       dispatchZk({
         type: "PATCH_PROOF",
@@ -2975,7 +3271,7 @@ export default function Help() {
       );
       if (!handleOfferMounted.current) return;
       setOpenRequests((prev) => {
-        const next = new Map(prev);
+        const next = new globalThis.Map(prev);
         next.delete(reqId);
         return next;
       });
@@ -3198,7 +3494,7 @@ export default function Help() {
   }, [mode, requestId]);
 
   const openRequestsArray = useMemo(
-    () => openRequestsArray,
+    () => Array.from(openRequests.values()),
     [openRequests],
   );
 
@@ -3263,9 +3559,30 @@ export default function Help() {
         fontFamily: "'Inter','Helvetica Neue',sans-serif",
       }}
     >
+      {/* Issue #101 — visually hidden live region for screen reader announcements */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: 0,
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        {zkAnnouncement}
+      </div>
       <aside
         ref={sidebarRef}
         id="helphone-help-sidebar"
+        role="complementary"
+        aria-label="Request panel"
         style={{
           width: "340px",
           minWidth: "340px",
@@ -3289,6 +3606,7 @@ export default function Help() {
             display: "none",
             width: "100%",
             padding: "12px 0 6px",
+            minHeight: "44px",
             background: "transparent",
             border: "none",
             cursor: "pointer",
@@ -3332,6 +3650,9 @@ export default function Help() {
                 fontSize: "12px",
                 color: "rgba(242,236,220,0.35)",
                 textDecoration: "none",
+                minHeight: "44px",
+                display: "flex",
+                alignItems: "center",
               }}
             >
               ← Back
@@ -3394,7 +3715,8 @@ export default function Help() {
                   if (!isWalletConnected) promptWalletConnection();
                 }}
                 style={{
-                  padding: "10px 0",
+                  padding: "12px 0",
+                  minHeight: "44px",
                   borderRadius: "7px",
                   border: "none",
                   background: mode === m ? color : "transparent",
@@ -3846,7 +4168,13 @@ export default function Help() {
                         onKeyDown={handleSearchKeyDown}
                         autoComplete="off"
                         role="combobox"
-                        aria-expanded={searchSuggestions.length > 0}
+                        aria-autocomplete="list"
+                        aria-haspopup="listbox"
+                        aria-expanded={Boolean(
+                          (searchSuggestions.length > 0 ||
+                            searchSuggestLoading) &&
+                          searchQuery.trim(),
+                        )}
                         aria-controls="hp-search-suggestions"
                         aria-activedescendant={
                           activeSuggestion >= 0
@@ -4358,6 +4686,8 @@ export default function Help() {
                       </div>
                     </div>
                     <button
+                      type="button"
+                      aria-label="Close request details"
                       onClick={() => setSelectedRequest(null)}
                       style={{
                         marginLeft: "auto",
@@ -4555,35 +4885,67 @@ export default function Help() {
                   )}
                 </div>
                 {myRequestsLoading && myRequests.length === 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
                     <style>{`@keyframes hp-shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }`}</style>
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} style={{
-                        padding: "10px 12px",
-                        borderRadius: "8px",
-                        background: "rgba(255,255,255,0.03)",
-                        border: "1px solid rgba(255,255,255,0.05)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                          <div style={{
-                            width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
-                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
-                            backgroundSize: "200px 100%",
-                            animation: "hp-shimmer 1.6s ease-in-out infinite"
-                          }} />
-                          <div style={{
-                            width: "80px", height: "10px", borderRadius: "3px",
-                            background: "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
-                            backgroundSize: "200px 100%",
-                            animation: "hp-shimmer 1.6s ease-in-out infinite"
-                          }} />
+                      <div
+                        key={i}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: "8px",
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.05)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              flexShrink: 0,
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                              backgroundSize: "200px 100%",
+                              animation: "hp-shimmer 1.6s ease-in-out infinite",
+                            }}
+                          />
+                          <div
+                            style={{
+                              width: "80px",
+                              height: "10px",
+                              borderRadius: "3px",
+                              background:
+                                "linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.12) 40px, rgba(255,255,255,0.06) 80px)",
+                              backgroundSize: "200px 100%",
+                              animation: "hp-shimmer 1.6s ease-in-out infinite",
+                            }}
+                          />
                         </div>
-                        <div style={{
-                          width: "50px", height: "8px", borderRadius: "3px",
-                          background: "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
-                          backgroundSize: "200px 100%",
-                          animation: "hp-shimmer 1.6s ease-in-out infinite"
-                        }} />
+                        <div
+                          style={{
+                            width: "50px",
+                            height: "8px",
+                            borderRadius: "3px",
+                            background:
+                              "linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.08) 40px, rgba(255,255,255,0.04) 80px)",
+                            backgroundSize: "200px 100%",
+                            animation: "hp-shimmer 1.6s ease-in-out infinite",
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
@@ -4762,24 +5124,27 @@ export default function Help() {
         </div>
       </aside>
 
-      <div id="helphone-help-map" style={{ flex: 1, position: "relative" }}>
-        <Map
-          mapboxAccessToken={MAPBOX_TOKEN}
+      <main
+        id="helphone-help-map"
+        aria-label="Emergency map"
+        style={{ flex: 1, position: "relative" }}
+      >
+        <MapboxWrapper
+          accessToken={MAPBOX_TOKEN}
           initialViewState={{
             longitude: DEFAULT_CENTER[1],
             latitude: DEFAULT_CENTER[0],
             zoom: 2,
           }}
-          style={{ width: "100%", height: "100%" }}
           mapStyle={MAP_STYLES[mapStyleIndex].url}
-          onClick={(e) => {
-            if (isGetMode && requestStatus === "idle") {
+          onMapClick={(e) => {
+            if (isGetMode && requestStatus === "idle" && e.lngLat) {
               setLocation([e.lngLat.lat, e.lngLat.lng]);
             }
           }}
         >
           {location && <MapController center={location} zoom={14} />}
-          <NavigationControl position="bottom-right" />
+          <MapKeyboardControls />
 
           {isGetMode && location && (
             <CharMarker
@@ -4907,7 +5272,9 @@ export default function Help() {
                     </strong>
                     <br />
                     <span style={{ fontSize: "11px", color: "#a2a586" }}>
-                      {EMERGENCY_TYPES.find((e) => e.id === req.emergency_type)?.label || "Needs help"} · Click sidebar to respond
+                      {EMERGENCY_TYPES.find((e) => e.id === req.emergency_type)
+                        ?.label || "Needs help"}{" "}
+                      · Click sidebar to respond
                     </span>
                   </Popup>
                 )}
@@ -4950,7 +5317,7 @@ export default function Help() {
                 onMarkArrived={handleMarkArrived}
               />
             )}
-        </Map>
+        </MapboxWrapper>
 
         <div
           ref={styleSelectorRef}
@@ -5106,6 +5473,7 @@ export default function Help() {
               }
               promptWalletConnection();
             }}
+            aria-label={isWalletConnected ? "Open profile" : "Connect Wallet"}
             style={{
               width: "44px",
               height: "44px",
@@ -5261,7 +5629,13 @@ export default function Help() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowDisconnectConfirm(true)}
+                    type="button"
+                    aria-label="Disconnect wallet"
+                    onClick={async () => {
+                      await StellarWalletsKit.disconnect();
+                      setWalletAddress("");
+                      setProfileOpen(false);
+                    }}
                     style={{
                       background: "rgba(255,255,255,0.06)",
                       border: "1px solid rgba(255,255,255,0.08)",
@@ -5447,10 +5821,21 @@ export default function Help() {
                     <img
                       src={`/assets/chars/${myChar}.png`}
                       alt=""
-                      style={{ width: "32px", height: "32px", objectFit: "contain" }}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        objectFit: "contain",
+                      }}
                     />
-                    <span style={{ fontSize: "12px", color: "rgba(242,236,220,0.6)" }}>
-                      {selectedChar ? "Change avatar" : "Auto-pick · tap to choose"}
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: "rgba(242,236,220,0.6)",
+                      }}
+                    >
+                      {selectedChar
+                        ? "Change avatar"
+                        : "Auto-pick · tap to choose"}
                     </span>
                   </button>
                 </div>
@@ -5463,7 +5848,9 @@ export default function Help() {
           open={showOnboarding}
           onClose={() => {
             setShowOnboarding(false);
-            try { localStorage.setItem("hp_tour_done", "1"); } catch {}
+            try {
+              localStorage.setItem("hp_tour_done", "1");
+            } catch {}
           }}
           onConnectWallet={() => promptWalletConnection()}
         />
@@ -5479,12 +5866,18 @@ export default function Help() {
           open={showFeedback}
           onClose={() => setShowFeedback(false)}
           onSubmit={async ({ rating, comment }) => {
-            const SERVER_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+            const SERVER_BASE =
+              import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
             try {
               await fetch(`${SERVER_BASE}/api/feedback`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ requestId: feedbackRequestId, responderAddress: feedbackResponderAddress, rating, comment }),
+                body: JSON.stringify({
+                  requestId: feedbackRequestId,
+                  responderAddress: feedbackResponderAddress,
+                  rating,
+                  comment,
+                }),
               });
             } catch {}
           }}
@@ -5522,6 +5915,9 @@ export default function Help() {
 
         <button
           id="hp-mobile-form-toggle"
+          type="button"
+          aria-label={showMobileForm ? "Collapse form" : "Expand form"}
+          aria-expanded={showMobileForm}
           onClick={() => setShowMobileForm((o) => !o)}
           style={{
             position: "absolute",
@@ -5558,7 +5954,7 @@ export default function Help() {
             )}
           </svg>
         </button>
-      </div>
+      </main>
 
       <ArrivalThanksModal
         open={arrivalThanksOpen}
@@ -5903,6 +6299,8 @@ export default function Help() {
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setShowEmergencyModal(false)}
                 style={{
                   width: "32px",

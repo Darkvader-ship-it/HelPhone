@@ -9,6 +9,26 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./test/setup.js'],
     include: ['test/**/*.test.js', 'test/**/*.test.jsx'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: [
+        'node_modules/',
+        'test/',
+        'tests/',
+        'dist/',
+        '**/*.config.js',
+        '**/*.config.mjs',
+        '**/setup.js',
+      ],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70,
+      },
+    },
   },
   build: {
     chunkSizeWarningLimit: 70000,
