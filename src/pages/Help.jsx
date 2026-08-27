@@ -2059,6 +2059,8 @@ export default function Help() {
   const [myRequests, setMyRequests] = useState([]);
   const [myRequestsLoading, setMyRequestsLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(null);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
 
   // Persist avatar selection to localStorage
@@ -4861,21 +4863,7 @@ export default function Help() {
               etaSeconds={responders[0].eta_seconds}
               isArrived={responderArrived}
               isResponderView={false}
-              onResolve={async () => {
-                try {
-                  await resolveRequest(
-                    activeWalletAddress,
-                    requestId,
-                    StellarWalletsKit,
-                  );
-                  setRequestStatus("Resolved");
-                  setFeedbackRequestId(requestId);
-                  setFeedbackResponderAddress(responders[0]?.responder || null);
-                  setShowFeedback(true);
-                } catch (err) {
-                  alert("Could not resolve: " + (err.message || ""));
-                }
-              }}
+              onResolve={() => setShowResolveConfirm(true)}
             />
           )}
 
@@ -5210,11 +5198,7 @@ export default function Help() {
                     </div>
                   </div>
                   <button
-                    onClick={async () => {
-                      await StellarWalletsKit.disconnect();
-                      setWalletAddress("");
-                      setProfileOpen(false);
-                    }}
+                    onClick={() => setShowDisconnectConfirm(true)}
                     style={{
                       background: "rgba(255,255,255,0.06)",
                       border: "1px solid rgba(255,255,255,0.08)",
@@ -5600,6 +5584,196 @@ export default function Help() {
                 }}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDisconnectConfirm && (
+        <div
+          onClick={() => setShowDisconnectConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1c3535",
+              borderRadius: "20px",
+              padding: "28px 24px 20px",
+              width: "100%",
+              maxWidth: "360px",
+              textAlign: "center",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
+            <h3
+              style={{
+                margin: "0 0 6px",
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "#F4ECDC",
+              }}
+            >
+              Disconnect wallet?
+            </h3>
+            <p
+              style={{
+                margin: "0 0 20px",
+                fontSize: "13px",
+                color: "rgba(242,236,220,0.5)",
+                lineHeight: 1.5,
+              }}
+            >
+              You will need to reconnect your wallet to request or offer help again.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.72)",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  await StellarWalletsKit.disconnect();
+                  setWalletAddress("");
+                  setProfileOpen(false);
+                  setShowDisconnectConfirm(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#FF7A6B",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showResolveConfirm && (
+        <div
+          onClick={() => setShowResolveConfirm(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1c3535",
+              borderRadius: "20px",
+              padding: "28px 24px 20px",
+              width: "100%",
+              maxWidth: "360px",
+              textAlign: "center",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.55)",
+            }}
+          >
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>⚠️</div>
+            <h3
+              style={{
+                margin: "0 0 6px",
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "#F4ECDC",
+              }}
+            >
+              Resolve request?
+            </h3>
+            <p
+              style={{
+                margin: "0 0 20px",
+                fontSize: "13px",
+                color: "rgba(242,236,220,0.5)",
+                lineHeight: 1.5,
+              }}
+            >
+              This will mark the request as resolved. This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={() => setShowResolveConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(242,236,220,0.72)",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await resolveRequest(
+                      activeWalletAddress,
+                      requestId,
+                      StellarWalletsKit,
+                    );
+                    setRequestStatus("Resolved");
+                    setFeedbackRequestId(requestId);
+                    setFeedbackResponderAddress(responders[0]?.responder || null);
+                    setShowFeedback(true);
+                  } catch (err) {
+                    alert("Could not resolve: " + (err.message || ""));
+                  }
+                  setShowResolveConfirm(false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#7357FF",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  cursor: "pointer",
+                }}
+              >
+                Resolve
               </button>
             </div>
           </div>
