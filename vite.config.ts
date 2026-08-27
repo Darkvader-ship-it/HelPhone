@@ -166,6 +166,11 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@noir-lang/noir_js', '@noir-lang/backend_barretenberg', '@noir-lang/acvm_js', '@noir-lang/noirc_abi']
-  }
+    exclude: [
+      '@noir-lang/noir_js',
+      '@noir-lang/backend_barretenberg',
+      '@noir-lang/acvm_js',
+      '@noir-lang/noirc_abi',
+    ],
+  },
 })
