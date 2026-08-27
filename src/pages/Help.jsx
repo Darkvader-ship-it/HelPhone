@@ -10,15 +10,9 @@ import {
 import { Link } from "react-router-dom";
 import { StellarWalletsKit } from "@creit-tech/stellar-wallets-kit/sdk";
 import { KitEventType } from "@creit-tech/stellar-wallets-kit/types";
-import Map, {
-  Marker,
-  Popup,
-  Source,
-  Layer,
-  NavigationControl,
-  useMap,
-} from "react-map-gl/mapbox";
+import { Marker, Popup, Source, Layer, useMap } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
+import MapboxWrapper from "../components/MapboxWrapper";
 import {
   getRequest,
   getActiveRequests,
@@ -2054,8 +2048,8 @@ export function cancellationToken() {
 const RETRY_CLS = "hp-mobile-open";
 const RETRY_ID = "helphone-help-sidebar";
 
-// Dead-letter queue for safeToggleClass — plain object avoids the global Map
-// constructor which is shadowed by the react-map-gl import on line 13.
+// Dead-letter queue for safeToggleClass — a plain null-prototype object,
+// used as a simple string-keyed store (no inherited keys to collide with).
 const dlq = Object.create(null);
 
 /**
@@ -4584,6 +4578,8 @@ export default function Help() {
                       </div>
                     </div>
                     <button
+                      type="button"
+                      aria-label="Close request details"
                       onClick={() => setSelectedRequest(null)}
                       style={{
                         marginLeft: "auto",
@@ -5025,23 +5021,21 @@ export default function Help() {
         aria-label="Emergency map"
         style={{ flex: 1, position: "relative" }}
       >
-        <Map
-          mapboxAccessToken={MAPBOX_TOKEN}
+        <MapboxWrapper
+          accessToken={MAPBOX_TOKEN}
           initialViewState={{
             longitude: DEFAULT_CENTER[1],
             latitude: DEFAULT_CENTER[0],
             zoom: 2,
           }}
-          style={{ width: "100%", height: "100%" }}
           mapStyle={MAP_STYLES[mapStyleIndex].url}
-          onClick={(e) => {
+          onMapClick={(e) => {
             if (isGetMode && requestStatus === "idle" && e.lngLat) {
               setLocation([e.lngLat.lat, e.lngLat.lng]);
             }
           }}
         >
           {location && <MapController center={location} zoom={14} />}
-          <NavigationControl position="bottom-right" />
           <MapKeyboardControls />
 
           {isGetMode && location && (
@@ -5229,7 +5223,7 @@ export default function Help() {
                 onMarkArrived={handleMarkArrived}
               />
             )}
-        </Map>
+        </MapboxWrapper>
 
         <div
           ref={styleSelectorRef}
@@ -5541,6 +5535,8 @@ export default function Help() {
                     </div>
                   </div>
                   <button
+                    type="button"
+                    aria-label="Disconnect wallet"
                     onClick={async () => {
                       await StellarWalletsKit.disconnect();
                       setWalletAddress("");
@@ -5815,6 +5811,9 @@ export default function Help() {
 
         <button
           id="hp-mobile-form-toggle"
+          type="button"
+          aria-label={showMobileForm ? "Collapse form" : "Expand form"}
+          aria-expanded={showMobileForm}
           onClick={() => setShowMobileForm((o) => !o)}
           style={{
             position: "absolute",
@@ -6005,6 +6004,8 @@ export default function Help() {
                 </p>
               </div>
               <button
+                type="button"
+                aria-label="Close"
                 onClick={() => setShowEmergencyModal(false)}
                 style={{
                   width: "32px",

@@ -1,9 +1,11 @@
 {
   "name": "helphone-prover",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node index.js",
+    "build": "node -e \"process.exit(0)\"",
     "test": "node --test *.test.js"
   },
   "dependencies": {

@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "description": "",
   "main": "server/index.js",
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:vite": "vite",
+    "dev:all": "node scripts/dev.mjs",
     "server": "node server/index.js",
     "start": "node server/index.js",
-    "dev:all": "node scripts/dev.mjs",
+    "start:all": "node scripts/dev.mjs",
     "build": "vite build",
+    "build:all": "npm run build && npm run build --workspace server --if-present",
     "preview": "vite preview",
     "prepare": "husky",
     "test": "vitest run",
