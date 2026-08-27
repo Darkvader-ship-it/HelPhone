@@ -12,6 +12,7 @@ import App from "./App.jsx";
 import Help from "./pages/Help.jsx";
 import Ranking from "./pages/Ranking.jsx";
 import Admin from "./pages/Admin.jsx";
+import VaultDashboard from "./pages/VaultDashboard.jsx";
 import "./App.css";
 
 const WALLET_ICON_PATHS = {
@@ -83,6 +84,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/help" element={<Help />} />
         <Route path="/ranking" element={<Ranking />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/vault" element={<VaultDashboard />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
