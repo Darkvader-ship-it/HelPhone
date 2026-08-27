@@ -1604,6 +1604,33 @@ export function sanitizeWalletAddress(raw) {
   return addr;
 }
 
+// ── Contact validation (#158) ──────────────────────────────────────────────
+// Enforces strict regex validation for phone numbers or specific handles
+// to prevent bad data or injection attacks.
+
+const PHONE_REGEX = /^\+?[1-9]\d{1,14}$/;
+const TELEGRAM_REGEX = /^@[A-Za-z0-9_]{5,32}$/;
+const CONTACT_ALLOWLIST = [PHONE_REGEX, TELEGRAM_REGEX];
+
+/**
+ * Validate a contact field value against the allowlist.
+ * Returns { valid, error } where error is a user-facing message.
+ * Empty strings are treated as valid (contact is optional).
+ */
+export function validateContact(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) return { valid: true, error: "" };
+  if (trimmed.length > 40) return { valid: false, error: "Contact is too long (max 40 characters)." };
+  const passesAny = CONTACT_ALLOWLIST.some((re) => re.test(trimmed));
+  if (!passesAny) {
+    return {
+      valid: false,
+      error: "Use a phone number (+1234567890) or Telegram handle (@username).",
+    };
+  }
+  return { valid: true, error: "" };
+}
+
 // ── Profile & UI helpers ─────────────────────────────────────────────────
 
 export function computeStep3Done(profile) {
@@ -1971,6 +1998,7 @@ export default function Help() {
     const p = loadProfile();
     return { nickname: p.nickname || "", contact: p.contact || "" };
   });
+  const [contactError, setContactError] = useState("");
 
   const [emergencyType, setEmergencyType] = useState(null);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -2744,6 +2772,12 @@ export default function Help() {
     }
     if (!emergencyType) {
       setSubmitError("Select what happened.");
+      return;
+    }
+    const contactCheck = validateContact(profile.contact);
+    if (!contactCheck.valid) {
+      setSubmitError(contactCheck.error);
+      setContactError(contactCheck.error);
       return;
     }
     const address = activeWalletAddress || (await promptWalletConnection());
@@ -3982,14 +4016,25 @@ export default function Help() {
                       }
                     />
                     <input
-                      style={S.input}
+                      style={{
+                        ...S.input,
+                        borderColor: contactError && profile.contact ? "rgba(255,122,107,0.5)" : S.input.border,
+                      }}
                       placeholder="@telegram or +54 11 5555-5555"
                       maxLength={40}
                       value={profile.contact}
-                      onChange={(e) =>
-                        setProfile((p) => ({ ...p, contact: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setProfile((p) => ({ ...p, contact: val }));
+                        const result = validateContact(val);
+                        setContactError(result.valid ? "" : result.error);
+                      }}
                     />
+                    {contactError && profile.contact && (
+                      <div style={{ fontSize: "10px", color: "#FF7A6B", marginTop: "4px", lineHeight: 1.4 }}>
+                        {contactError}
+                      </div>
+                    )}
                     <div
                       style={{
                         fontSize: "9.5px",
@@ -3997,7 +4042,7 @@ export default function Help() {
                         lineHeight: 1.4,
                       }}
                     >
-                      How responders reach you. Stored on-chain.
+                      Phone (+country code) or @telegram handle. Stored on-chain.
                     </div>
                   </div>
                 )}
@@ -5290,7 +5335,9 @@ export default function Help() {
                       width: "100%",
                       padding: "8px 10px",
                       background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      border: contactError && profile.contact
+                        ? "1px solid rgba(255,122,107,0.5)"
+                        : "1px solid rgba(255,255,255,0.08)",
                       borderRadius: "8px",
                       color: "rgba(242,236,220,0.9)",
                       fontSize: "13px",
@@ -5300,10 +5347,18 @@ export default function Help() {
                     placeholder="@telegram or +54 11 5555-5555"
                     maxLength={40}
                     value={profile.contact}
-                    onChange={(e) =>
-                      setProfile((p) => ({ ...p, contact: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProfile((p) => ({ ...p, contact: val }));
+                      const result = validateContact(val);
+                      setContactError(result.valid ? "" : result.error);
+                    }}
                   />
+                  {contactError && profile.contact && (
+                    <div style={{ fontSize: "10px", color: "#FF7A6B", marginTop: "4px", lineHeight: 1.4 }}>
+                      {contactError}
+                    </div>
+                  )}
                   <div
                     style={{
                       fontSize: "9.5px",
