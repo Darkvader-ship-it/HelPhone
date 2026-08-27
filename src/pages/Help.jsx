@@ -35,6 +35,9 @@ import {
   updateLocation,
   recordExpertVerification,
   subscribeToContractEvents,
+  saveWalletAddress,
+  loadWalletAddress,
+  clearWalletAddress,
 } from "../lib/contract";
 import {
   buildLocationProofZone,
@@ -2101,6 +2104,7 @@ export default function Help() {
   const zkError = zkState.error;
 
   const [walletAddress, setWalletAddress] = useState("");
+  const [walletLoading, setWalletLoading] = useState(true);
   const activeWalletAddress =
     typeof walletAddress === "string" && walletAddress.trim().length > 0
       ? walletAddress.trim()
@@ -2133,18 +2137,46 @@ export default function Help() {
     async function syncWallet() {
       try {
         const result = await token.wrap(StellarWalletsKit.getAddress());
-        if (result === undefined || result === null) return;
-        if (typeof result.address !== "string") return;
-        debouncedSet(sanitizeWalletAddress(result.address));
+        if (result === undefined || result === null) {
+          // No active session — check localStorage for saved address
+          const saved = loadWalletAddress();
+          if (saved) {
+            // Attempt silent reconnection with saved address
+            try {
+              const reconnect = await token.wrap(StellarWalletsKit.getAddress());
+              if (reconnect?.address) {
+                debouncedSet(sanitizeWalletAddress(reconnect.address));
+              } else {
+                // Reconnect failed — clear stale saved address
+                clearWalletAddress();
+                debouncedSet("");
+              }
+            } catch {
+              clearWalletAddress();
+              debouncedSet("");
+            }
+          } else {
+            debouncedSet("");
+          }
+        } else if (typeof result.address === "string") {
+          const sanitized = sanitizeWalletAddress(result.address);
+          debouncedSet(sanitized);
+          if (sanitized) saveWalletAddress(sanitized);
+        }
       } catch {
         if (token.active) debouncedSet("");
+      } finally {
+        if (token.active) setWalletLoading(false);
       }
     }
 
     syncWallet();
     offState = StellarWalletsKit.on(KitEventType.STATE_UPDATED, (event) => {
       if (!token.active) return;
-      debouncedSet(sanitizeWalletAddress(event?.payload?.address));
+      const sanitized = sanitizeWalletAddress(event?.payload?.address);
+      debouncedSet(sanitized);
+      if (sanitized) saveWalletAddress(sanitized);
+      else clearWalletAddress();
     });
     offDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
       try {
@@ -2152,6 +2184,7 @@ export default function Help() {
       } catch {
         // wallet update after disconnect — non-critical, ignore
       }
+      clearWalletAddress();
       setProfileOpen(false);
     });
 
@@ -3304,6 +3337,36 @@ export default function Help() {
               ← Back
             </Link>
           </div>
+
+          {walletLoading && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "10px",
+                marginBottom: "16px",
+                borderRadius: "10px",
+                background: "rgba(115,87,255,0.08)",
+                border: "1px solid rgba(115,87,255,0.15)",
+              }}
+            >
+              <div
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  border: "2px solid rgba(115,87,255,0.3)",
+                  borderTopColor: "#7357FF",
+                  animation: "spin 0.8s linear infinite",
+                }}
+              />
+              <span style={{ fontSize: "12px", color: "rgba(242,236,220,0.5)" }}>
+                Reconnecting wallet...
+              </span>
+            </div>
+          )}
 
           <div
             style={{
@@ -5658,6 +5721,7 @@ export default function Help() {
                 onClick={async () => {
                   await StellarWalletsKit.disconnect();
                   setWalletAddress("");
+                  clearWalletAddress();
                   setProfileOpen(false);
                   setShowDisconnectConfirm(false);
                 }}
